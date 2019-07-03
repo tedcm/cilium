@@ -55,7 +55,6 @@ func writeIncludes(w io.Writer) (int, error) {
 func (l *linuxDatapath) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeConfiguration) error {
 	extraMacrosMap := make(map[string]string)
 	cDefinesMap := make(map[string]string)
-
 	fw := bufio.NewWriter(w)
 
 	writeIncludes(w)
@@ -242,6 +241,28 @@ func (l *linuxDatapath) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeConf
 		cDefinesMap["NODEPORT_PORT_MAX_NAT"] = "65535"
 	}
 
+	// TODO (ianvernon) shift this into writeNodeConfig.
+	// After that, remove GetPrefixLengths from DeviceConfiguration
+	// In case the Linux kernel doesn't support LPM map type, pass the set
+	// of prefix length for the datapath to lookup the map.
+	if ipcache.IPCache.MapType != bpf.BPF_MAP_TYPE_LPM_TRIE {
+		if l.PrefixLengthCounter() == nil {
+			log.Error("PrefixLengthCounter is nil?")
+		}
+		ipcachePrefixes6, ipcachePrefixes4 := l.PrefixLengthCounter().ToBPFData()
+
+		var ipv6, ipv4 string
+		for _, prefix := range ipcachePrefixes6 {
+			ipv6 += fmt.Sprintf("%d, ", prefix)
+		}
+		for _, prefix := range ipcachePrefixes4 {
+			ipv4 += fmt.Sprintf("%d, ", prefix)
+		}
+
+		cDefinesMap["IPCACHE6_PREFIXES"] = ipv6
+		cDefinesMap["IPCACHE4_PREFIXES"] = ipv4
+	}
+
 	// Since golang maps are unordered, we sort the keys in the map
 	// to get a consistent writtern format to the writer. This maintains
 	// the consistency when we try to calculate hash for a datapath after
@@ -280,23 +301,6 @@ func (l *linuxDatapath) writeNetdevConfig(w io.Writer, cfg datapath.DeviceConfig
 	fmt.Fprint(w, cfg.GetOptions().GetFmtList())
 	if option.Config.IsFlannelMasterDeviceSet() {
 		fmt.Fprint(w, "#define HOST_REDIRECT_TO_INGRESS 1\n")
-	}
-
-	// In case the Linux kernel doesn't support LPM map type, pass the set
-	// of prefix length for the datapath to lookup the map.
-	if ipcache.IPCache.MapType != bpf.BPF_MAP_TYPE_LPM_TRIE {
-		ipcachePrefixes6, ipcachePrefixes4 := cfg.GetCIDRPrefixLengths()
-
-		fmt.Fprint(w, "#define IPCACHE6_PREFIXES ")
-		for _, prefix := range ipcachePrefixes6 {
-			fmt.Fprintf(w, "%d,", prefix)
-		}
-		fmt.Fprint(w, "\n")
-		fmt.Fprint(w, "#define IPCACHE4_PREFIXES ")
-		for _, prefix := range ipcachePrefixes4 {
-			fmt.Fprintf(w, "%d,", prefix)
-		}
-		fmt.Fprint(w, "\n")
 	}
 }
 

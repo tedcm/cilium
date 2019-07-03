@@ -16,6 +16,8 @@ package datapath
 
 import (
 	"io"
+
+	"github.com/cilium/cilium/pkg/counter"
 )
 
 // Datapath is the interface to abstract all datapath interactions. The
@@ -54,4 +56,13 @@ type Datapath interface {
 	// RemoveProxyRules creates the necessary datapath config (e.g., iptables
 	// rules for redirecting host proxy traffic on a specific ProxyPort)
 	RemoveProxyRules(proxyPort uint16, ingress bool, name string) error
+
+	// GetCIDRPrefixLengths fetches the lists of unique IPv6 and IPv4
+	// prefix lengths used for datapath lookups, each of which is sorted
+	// from longest prefix to shortest prefix. It must return more than
+	// one element in each returned array.
+	//GetCIDRPrefixLengths() (s6, s4 []int)
+	//GetCIDRPrefixLengths() (s6, s4 []int)
+
+	PrefixLengthCounter() *counter.PrefixLengthCounter
 }

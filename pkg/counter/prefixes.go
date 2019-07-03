@@ -139,3 +139,7 @@ func (p *PrefixLengthCounter) ToBPFData() (s6, s4 []int) {
 
 	return p.v6.ToBPFData(), p.v4.ToBPFData()
 }
+
+//Add(prefixes []*net.IPNet) (bool, error)
+//Delete(prefixes []*net.IPNet) (changed bool)
+//ToBPFData() (s6, s4 []int)
