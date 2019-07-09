@@ -1532,6 +1532,7 @@ func (e *Endpoint) GetState() string {
 func (e *Endpoint) SetStateLocked(toState, reason string) bool {
 	// Validate the state transition.
 	fromState := e.state
+	logStatus := true
 
 	switch fromState { // From state
 	case "": // Special case for capturing initial state transitions like
@@ -1564,9 +1565,16 @@ func (e *Endpoint) SetStateLocked(toState, reason string) bool {
 		// No valid transitions, as disconnected is a terminal state for the endpoint.
 	case StateWaitingToRegenerate:
 		switch toState {
-		// Note that transitions to waiting-to-regenerate state
+		// Note that transitions to StateWaitingToRegenerate are not allowed,
+		// as callers of this function enqueue regenerations if 'true' is
+		// returned. We don't want to return 'true' for the case of
+		// transitioning to StateWaitingToRegenerate, as this means that a
+		// regeneration is already queued up. Callers would then queue up
+		// another unneeded regeneration, which is undesired.
 		case StateWaitingForIdentity, StateDisconnecting, StateRestoring:
 			goto OKState
+		default:
+			logStatus = false
 		}
 	case StateRegenerating:
 		switch toState {
@@ -1593,7 +1601,10 @@ func (e *Endpoint) SetStateLocked(toState, reason string) bool {
 			"line":                            fileLine,
 		}).Info("Invalid state transition skipped")
 	}
-	e.logStatusLocked(Other, Warning, fmt.Sprintf("Skipped invalid state transition to %s due to: %s", toState, reason))
+
+	if logStatus {
+		e.logStatusLocked(Other, Warning, fmt.Sprintf("Skipped invalid state transition to %s due to: %s", toState, reason))
+	}
 	return false
 
 OKState:
