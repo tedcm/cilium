@@ -442,9 +442,9 @@ func upsertIPsecLog(err error, spec string, loc, rem *net.IPNet, spi uint8) {
 		"remote-ip":      rem,
 		"spi":            spi,
 	})
-	if err != nil {
-		scopedLog.WithError(err).Error("IPsec enable failed")
-	}
+	//	if err != nil {
+	scopedLog.WithError(err).Error("IPsec enable failed")
+	//	}
 }
 
 func (n *linuxNodeHandler) enableSubnetIPsec(v4CIDR, v6CIDR []*net.IPNet) {
@@ -628,13 +628,13 @@ func (n *linuxNodeHandler) enableIPsec(newNode *node.Node) {
 				upsertIPsecLog(err, "local IPv4", ipsecLocal, ipsecIPv4Wildcard, spi)
 			}
 		} else {
-			if ciliumInternalIPv4 := newNode.GetCiliumInternalIP(false); ciliumInternalIPv4 != nil {
-				ipsecLocal := &net.IPNet{IP: n.nodeAddressing.IPv4().Router(), Mask: n.nodeAddressing.IPv4().AllocationCIDR().Mask}
-				ipsecRemote := &net.IPNet{IP: ciliumInternalIPv4, Mask: newNode.IPv4AllocCIDR.Mask}
-				n.replaceNodeIPSecOutRoute(new4Net)
-				spi, err = ipsec.UpsertIPsecEndpoint(ipsecLocal, ipsecRemote, ipsec.IPSecDirOut, n.nodeConfig.EncryptNode)
-				upsertIPsecLog(err, "IPv4", ipsecLocal, ipsecRemote, spi)
-			}
+			//			if ciliumInternalIPv4 := newNode.GetCiliumInternalIP(false); ciliumInternalIPv4 != nil {
+			//				ipsecLocal := &net.IPNet{IP: n.nodeAddressing.IPv4().Router(), Mask: n.nodeAddressing.IPv4().AllocationCIDR().Mask}
+			//				ipsecRemote := &net.IPNet{IP: ciliumInternalIPv4, Mask: newNode.IPv4AllocCIDR.Mask}
+			//				n.replaceNodeIPSecOutRoute(new4Net)
+			//				spi, err = ipsec.UpsertIPsecEndpoint(ipsecLocal, ipsecRemote, ipsec.IPSecDirOut, n.nodeConfig.EncryptNode)
+			//				upsertIPsecLog(err, "IPv4", ipsecLocal, ipsecRemote, spi)
+			//			}
 		}
 	}
 
