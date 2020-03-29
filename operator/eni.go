@@ -92,7 +92,7 @@ func ciliumNodeDeleted(nodeName string) {
 // startENIAllocator kicks of ENI allocation, the initial connection to AWS
 // APIs is done in a blocking manner, given that is successful, a controller is
 // started to manage allocation based on CiliumNode custom resources
-func startENIAllocator(awsClientQPSLimit float64, awsClientBurst int) error {
+func startENIAllocator(awsClientQPSLimit float64, awsClientBurst int, subnetsTags map[string]string, subnetsIDs []string) error {
 	log.Info("Starting ENI allocator...")
 
 	cfg, err := external.LoadDefaultAWSConfig()
@@ -119,9 +119,10 @@ func startENIAllocator(awsClientQPSLimit float64, awsClientBurst int) error {
 		instances *eni.InstancesManager
 	)
 
+	subnetsFilters := ec2shim.NewSubnetsFilters(subnetsTags, subnetsIDs)
 	if enableMetrics {
 		eniMetrics := metrics.NewPrometheusMetrics(metricNamespace, registry)
-		ec2Client = ec2shim.NewClient(ec2.New(cfg), eniMetrics, awsClientQPSLimit, awsClientBurst)
+		ec2Client = ec2shim.NewClient(ec2.New(cfg), eniMetrics, awsClientQPSLimit, awsClientBurst, subnetsFilters)
 		log.Info("Connected to EC2 service API")
 		instances = eni.NewInstancesManager(ec2Client, eniMetrics)
 		nodeManager, err = eni.NewNodeManager(instances, ec2Client, &k8sAPI{}, eniMetrics, eniParallelWorkers)
@@ -132,7 +133,7 @@ func startENIAllocator(awsClientQPSLimit float64, awsClientBurst int) error {
 		// Inject dummy metrics operations that do nothing so we don't panic if
 		// metrics aren't enabled
 		noOpMetric := &noOpMetrics{}
-		ec2Client = ec2shim.NewClient(ec2.New(cfg), noOpMetric, awsClientQPSLimit, awsClientBurst)
+		ec2Client = ec2shim.NewClient(ec2.New(cfg), noOpMetric, awsClientQPSLimit, awsClientBurst, subnetsFilters)
 		log.Info("Connected to EC2 service API")
 		instances = eni.NewInstancesManager(ec2Client, noOpMetric)
 		nodeManager, err = eni.NewNodeManager(instances, ec2Client, &k8sAPI{}, noOpMetric, eniParallelWorkers)

@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/cilium/cilium/pkg/aws/types"
-	"github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
+	v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	"github.com/cilium/cilium/pkg/spanstat"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -30,9 +30,10 @@ import (
 
 // Client represents an EC2 API client
 type Client struct {
-	ec2Client  *ec2.EC2
-	limiter    *rate.Limiter
-	metricsAPI metricsAPI
+	ec2Client      *ec2.EC2
+	limiter        *rate.Limiter
+	metricsAPI     metricsAPI
+	subnetsFilters []ec2.Filter
 }
 
 type metricsAPI interface {
@@ -41,12 +42,35 @@ type metricsAPI interface {
 }
 
 // NewClient returns a new EC2 client
-func NewClient(ec2Client *ec2.EC2, metrics metricsAPI, rateLimit float64, burst int) *Client {
+func NewClient(ec2Client *ec2.EC2, metrics metricsAPI, rateLimit float64, burst int, subnetsFilters []ec2.Filter) *Client {
 	return &Client{
-		ec2Client:  ec2Client,
-		metricsAPI: metrics,
-		limiter:    rate.NewLimiter(rate.Limit(rateLimit), burst),
+		ec2Client:      ec2Client,
+		metricsAPI:     metrics,
+		limiter:        rate.NewLimiter(rate.Limit(rateLimit), burst),
+		subnetsFilters: subnetsFilters,
 	}
+}
+
+// NewSubnetsFilters transforms a map of tags and values and a slice of subnets
+// into a slice of ec2.Filter adequate to filter AWS subnets.
+func NewSubnetsFilters(tags map[string]string, ids []string) []ec2.Filter {
+	filters := make([]ec2.Filter, 0, len(tags)+1)
+
+	for k, v := range tags {
+		filters = append(filters, ec2.Filter{
+			Name:   aws.String(fmt.Sprintf("tag:%s", k)),
+			Values: []string{v},
+		})
+	}
+
+	if len(ids) > 0 {
+		filters = append(filters, ec2.Filter{
+			Name:   aws.String("subnet-id"),
+			Values: ids,
+		})
+	}
+
+	return filters
 }
 
 // deriveStatus returns a status string based on the HTTP response provided by
@@ -73,9 +97,10 @@ func (c *Client) rateLimit(operation string) {
 }
 
 // describeNetworkInterfaces lists all ENIs
-func (c *Client) describeNetworkInterfaces() ([]ec2.NetworkInterface, error) {
+func (c *Client) describeNetworkInterfaces(subnets types.SubnetMap) ([]ec2.NetworkInterface, error) {
 	var (
 		networkInterfaces []ec2.NetworkInterface
+		interfacesFilters []ec2.Filter
 		nextToken         string
 	)
 
@@ -84,6 +109,18 @@ func (c *Client) describeNetworkInterfaces() ([]ec2.NetworkInterface, error) {
 		req := &ec2.DescribeNetworkInterfacesInput{}
 		if nextToken != "" {
 			req.NextToken = &nextToken
+		}
+
+		if len(c.subnetsFilters) > 0 {
+			subnetsIDs := make([]string, 0, len(subnets))
+			for id := range subnets {
+				subnetsIDs = append(subnetsIDs, id)
+			}
+			interfacesFilters = append(interfacesFilters, ec2.Filter{
+				Name:   aws.String("subnet-id"),
+				Values: subnetsIDs,
+			})
+			req.Filters = interfacesFilters
 		}
 
 		sinceStart := spanstat.Start()
@@ -182,7 +219,7 @@ func parseENI(iface *ec2.NetworkInterface, vpcs types.VpcMap, subnets types.Subn
 func (c *Client) GetInstances(vpcs types.VpcMap, subnets types.SubnetMap) (types.InstanceMap, error) {
 	instances := types.InstanceMap{}
 
-	networkInterfaces, err := c.describeNetworkInterfaces()
+	networkInterfaces, err := c.describeNetworkInterfaces(subnets)
 	if err != nil {
 		return nil, err
 	}
@@ -246,7 +283,11 @@ func (c *Client) GetVpcs() (types.VpcMap, error) {
 // describeSubnets lists all subnets
 func (c *Client) describeSubnets() ([]ec2.Subnet, error) {
 	sinceStart := spanstat.Start()
-	listReq := c.ec2Client.DescribeSubnetsRequest(&ec2.DescribeSubnetsInput{})
+	reqInput := &ec2.DescribeSubnetsInput{}
+	if len(c.subnetsFilters) > 0 {
+		reqInput.Filters = c.subnetsFilters
+	}
+	listReq := c.ec2Client.DescribeSubnetsRequest(reqInput)
 	result, err := listReq.Send()
 	c.metricsAPI.ObserveEC2APICall("DescribeSubnets", deriveStatus(listReq.Request, err), sinceStart.Seconds())
 	if err != nil {

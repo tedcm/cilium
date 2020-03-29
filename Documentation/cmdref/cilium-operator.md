@@ -40,6 +40,8 @@ cilium-operator [flags]
       --kvstore-opt map                        Key-value store options (default map[])
       --metrics-address string                 Address to serve Prometheus metrics (default ":6942")
       --nodes-gc-interval duration             GC interval for nodes store in the kvstore (default 2m0s)
+      --subnet-ids-filter strings              Subnets IDs (separated by commas)
+      --subnet-tags-filter stringToString      Subnets tags in the form of k1=v1,k2=v2 (multiple k/v pairs can also be passed by repeating the CLI flag (default [])
       --synchronize-k8s-nodes                  Synchronize Kubernetes nodes to kvstore and perform CNP GC (default true)
       --synchronize-k8s-services               Synchronize Kubernetes services to kvstore (default true)
       --unmanaged-pod-watcher-interval int     Interval to check for unmanaged kube-dns pods (0 to disable) (default 15)

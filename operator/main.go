@@ -65,6 +65,8 @@ var (
 	metricsAddress      string
 	eniParallelWorkers  int64
 	enableENI           bool
+	subnetsTags         = make(map[string]string)
+	subnetsIDs          = []string{}
 
 	k8sIdentityGCInterval       time.Duration
 	k8sIdentityHeartbeatTimeout time.Duration
@@ -129,6 +131,12 @@ func init() {
 	flags.String(option.K8sNamespaceName, "", "Name of the Kubernetes namespace in which Cilium Operator is deployed in")
 	flags.MarkHidden(option.K8sNamespaceName)
 	option.BindEnv(option.K8sNamespaceName)
+
+	flags.StringToStringVar(&subnetsTags, "subnet-tags-filter", subnetsTags,
+		"Subnets tags in the form of k1=v1,k2=v2 (multiple k/v pairs can also be passed by repeating the CLI flag")
+	option.BindEnv("subnet-tags-filter")
+	flags.StringSliceVar(&subnetsIDs, "subnet-ids-filter", subnetsIDs, "Subnets IDs (separated by commas)")
+	option.BindEnv("subnet-ids-filter")
 
 	flags.IntVar(&unmanagedKubeDnsWatcherInterval, "unmanaged-pod-watcher-interval", 15, "Interval to check for unmanaged kube-dns pods (0 to disable)")
 
@@ -242,7 +250,7 @@ func runOperator(cmd *cobra.Command) {
 	if enableENI {
 		awsClientQPSLimit := viper.GetFloat64(option.AWSClientQPSLimit)
 		awsClientBurst := viper.GetInt(option.AWSClientBurst)
-		if err := startENIAllocator(awsClientQPSLimit, awsClientBurst); err != nil {
+		if err := startENIAllocator(awsClientQPSLimit, awsClientBurst, subnetsTags, subnetsIDs); err != nil {
 			log.WithError(err).Fatal("Unable to start ENI allocator")
 		}
 	}
