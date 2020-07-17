@@ -15,11 +15,14 @@
 package kvstore
 
 import (
+	"encoding/json"
+
 	"bytes"
 	"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
+	pb "go.etcd.io/etcd/etcdserver/etcdserverpb"
 	"io/ioutil"
 	"net/url"
 	"os"
@@ -694,6 +697,11 @@ func (e *etcdClient) LockPath(ctx context.Context, path string) (KVLocker, error
 		e.checkLockSession(err, leaseID)
 		return nil, Hint(err)
 	}
+	var nonNilHeader pb.ResponseHeader
+	if mu.Header() != nil {
+		nonNilHeader = *mu.Header()
+	}
+	Trace("acquired lock", nil, logrus.Fields{"printfmutex": fmt.Sprintf("%#v", mu), "printfnonnilheader": fmt.Sprintf("%#v", nonNilHeader)})
 
 	return &etcdMutex{mutex: mu}, nil
 }
@@ -1142,6 +1150,11 @@ func (e *etcdClient) UpdateIfDifferentIfLocked(ctx context.Context, key string, 
 	}
 
 	if !txnresp.Succeeded {
+		bytes, err := json.Marshal(txnresp)
+		if err != nil {
+			Trace("UpdateIfDifferentIfLockedMarshalFail", err, logrus.Fields{fieldKey: key})
+		}
+		Trace("UpdateIfDifferentIfLockedTxnBytes", nil, logrus.Fields{fieldKey: key, "txnrespbytes": string(bytes)})
 		return false, ErrLockLeaseExpired
 	}
 

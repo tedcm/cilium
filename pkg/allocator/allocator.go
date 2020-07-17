@@ -466,7 +466,12 @@ func (a *Allocator) lockedAllocate(ctx context.Context, key AllocatorKey) (idpoo
 		return 0, false, false, err
 	}
 
-	defer lock.Unlock(context.Background())
+	defer func() {
+		err := lock.Unlock(context.Background())
+		if err != nil {
+			kvstore.Trace("Failed to unlock mutex", err, logrus.Fields{fieldKey: key})
+		}
+	}()
 
 	// fetch first key that matches /value/<key> while ignoring the
 	// node suffix
