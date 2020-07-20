@@ -1140,7 +1140,8 @@ func (e *etcdClient) UpdateIfDifferentIfLocked(ctx context.Context, key string, 
 	duration := spanstat.Start()
 	e.limiter.Wait(ctx)
 	cnds := lock.Comparator().(client.Cmp)
-	txnresp, err := e.client.Txn(ctx).If(cnds).Then(client.OpGet(key)).Commit()
+	getLocksOp := client.OpGet("cilium/state/identities/v1/locks/", client.WithPrefix())
+	txnresp, err := e.client.Txn(ctx).If(cnds).Then(client.OpGet(key)).Else(getLocksOp).Commit()
 
 	increaseMetric(key, metricRead, "Get", duration.EndError(err).Total(), err)
 
