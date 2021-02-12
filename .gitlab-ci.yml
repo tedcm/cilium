@@ -8,4 +8,8 @@ build:
   only:
     - tags  
   script:
-    - make -C images cilium-image operator-image PUSH=true REGISTRIES=486234852809.dkr.ecr.us-east-1.amazonaws.com
+    - |
+      export DOCKER_REGISTRY=486234852809.dkr.ecr.us-east-1.amazonaws.com
+      export DOCKER_BUILDKIT=1
+      export DOCKER_BUILDX=1
+      make docker-image-runtime
