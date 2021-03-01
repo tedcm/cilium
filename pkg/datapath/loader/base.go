@@ -365,7 +365,8 @@ func (l *Loader) Reinitialize(ctx context.Context, o datapath.BaseProgramOwner, 
 	if option.Config.IPAM == ipamOption.IPAMENI {
 		// For the ENI ipam mode on EKS, this will be the interface that
 		// the router (cilium_host) IP is associated to.
-		if info := node.GetRouterInfo(); info != nil {
+		// Encrypt interface name is needed only when IPSec is enabled.
+		if info := node.GetRouterInfo(); info != nil && option.Config.EnableIPSec{
 			mac := info.GetMac()
 			iface, err := linuxrouting.RetrieveIfaceNameFromMAC(mac.String())
 			if err != nil {
