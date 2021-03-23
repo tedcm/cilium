@@ -670,6 +670,9 @@ func init() {
 	flags.Bool(option.PProf, false, "Enable serving the pprof debugging API")
 	option.BindEnv(option.PProf)
 
+	flags.Int(option.PProfPort, 6060, "Port that the pprof listens on")
+	option.BindEnv(option.PProfPort)
+
 	flags.String(option.PrefilterDevice, "undefined", "Device facing external network for XDP prefiltering")
 	option.BindEnv(option.PrefilterDevice)
 
@@ -963,7 +966,7 @@ func initEnv(cmd *cobra.Command) {
 	}
 
 	if option.Config.PProf {
-		pprof.Enable()
+		pprof.Enable(option.Config.PProfPort)
 	}
 
 	if option.Config.PreAllocateMaps {

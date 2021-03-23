@@ -32,6 +32,7 @@ import (
 type flags struct {
 	debug                  bool
 	pprof                  bool
+	pprofPort              int
 	gops                   bool
 	dialTimeout            time.Duration
 	listenAddress          string
@@ -57,6 +58,9 @@ func New() *cobra.Command {
 	)
 	cmd.Flags().BoolVar(
 		&f.pprof, "pprof", false, "Enable serving the pprof debugging API",
+	)
+	cmd.Flags().IntVar(
+		&f.pprofPort, "pprof-port", defaults.PprofPort, "Port that the pprof listens on",
 	)
 	cmd.Flags().BoolVar(
 		&f.gops, "gops", true, "Run gops agent",
@@ -101,7 +105,7 @@ func runServe(f flags) error {
 		opts = append(opts, server.WithDebug())
 	}
 	if f.pprof {
-		pprof.Enable()
+		pprof.Enable(f.pprofPort)
 	}
 	if f.gops {
 		if err := agent.Listen(agent.Options{}); err != nil {
