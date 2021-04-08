@@ -17,7 +17,6 @@
 package v2
 
 import (
-	"context"
 	time "time"
 
 	ciliumiov2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
@@ -59,13 +58,13 @@ func NewFilteredCiliumIdentityInformer(client versioned.Interface, resyncPeriod 
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.CiliumV2().CiliumIdentities().List(context.TODO(), options)
+				return client.CiliumV2().CiliumIdentities().List(options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.CiliumV2().CiliumIdentities().Watch(context.TODO(), options)
+				return client.CiliumV2().CiliumIdentities().Watch(options)
 			},
 		},
 		&ciliumiov2.CiliumIdentity{},
