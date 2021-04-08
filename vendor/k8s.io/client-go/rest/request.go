@@ -30,7 +30,6 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"golang.org/x/net/http2"
@@ -39,7 +38,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer/streaming"
-	utilclock "k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apimachinery/pkg/watch"
 	restclientwatch "k8s.io/client-go/rest/watch"
@@ -53,9 +51,6 @@ var (
 	// throttled (via the provided rateLimiter) for more than longThrottleLatency will
 	// be logged.
 	longThrottleLatency = 50 * time.Millisecond
-
-	// extraLongThrottleLatency defines the threshold for logging requests at log level 2.
-	extraLongThrottleLatency = 1 * time.Second
 )
 
 // HTTPClient is an interface for testing a request object.
@@ -66,8 +61,8 @@ type HTTPClient interface {
 // ResponseWrapper is an interface for getting a response.
 // The response may be either accessed as a raw data (the whole output is put into memory) or as a stream.
 type ResponseWrapper interface {
-	DoRaw(context.Context) ([]byte, error)
-	Stream(context.Context) (io.ReadCloser, error)
+	DoRaw() ([]byte, error)
+	Stream() (io.ReadCloser, error)
 }
 
 // RequestConstructionError is returned when there's an error assembling a request.
@@ -109,6 +104,9 @@ type Request struct {
 	// output
 	err  error
 	body io.Reader
+
+	// This is only used for per-request timeouts, deadlines, and cancellations.
+	ctx context.Context
 }
 
 // NewRequest creates a new request helper object for accessing runtime.Objects on a server.
@@ -440,6 +438,13 @@ func (r *Request) Body(obj interface{}) *Request {
 	return r
 }
 
+// Context adds a context to the request. Contexts are only used for
+// timeouts, deadlines, and cancellations.
+func (r *Request) Context(ctx context.Context) *Request {
+	r.ctx = ctx
+	return r
+}
+
 // URL returns the current working URL.
 func (r *Request) URL() *url.URL {
 	p := r.pathPrefix
@@ -487,41 +492,36 @@ func (r Request) finalURLTemplate() url.URL {
 	}
 	r.params = newParams
 	url := r.URL()
-	segments := strings.Split(r.URL().Path, "/")
+
+	segments := strings.Split(url.Path, "/")
 	groupIndex := 0
 	index := 0
-	if r.URL() != nil && r.c.base != nil && strings.Contains(r.URL().Path, r.c.base.Path) {
-		// only add baseURL path length if it is different than `/`
-		// as strings.Split("/", "/") returns length of 2
-		if r.c.base.Path != "/" {
-			// We need to perform a `path.Join` as path.Join appends `/` to a
-			// path that does not contain `/` and removes duplicate `/` if they
-			// exist.
-			groupIndex += len(strings.Split(path.Join("/", r.c.base.Path), "/"))
-		} else {
-			groupIndex += 1
+	trimmedBasePath := ""
+	if url != nil && r.c.base != nil && strings.Contains(url.Path, r.c.base.Path) {
+		p := strings.TrimPrefix(url.Path, r.c.base.Path)
+		if !strings.HasPrefix(p, "/") {
+			p = "/" + p
 		}
+		// store the base path that we have trimmed so we can append it
+		// before returning the URL
+		trimmedBasePath = r.c.base.Path
+		segments = strings.Split(p, "/")
+		groupIndex = 1
 	}
-	if groupIndex >= len(segments) {
+	if len(segments) <= 2 {
 		return *url
 	}
 
 	const CoreGroupPrefix = "api"
 	const NamedGroupPrefix = "apis"
-	const Version = "version"
 	isCoreGroup := segments[groupIndex] == CoreGroupPrefix
 	isNamedGroup := segments[groupIndex] == NamedGroupPrefix
-	isVersion := segments[groupIndex] == Version
 	if isCoreGroup {
 		// checking the case of core group with /api/v1/... format
 		index = groupIndex + 2
 	} else if isNamedGroup {
 		// checking the case of named group with /apis/apps/v1/... format
 		index = groupIndex + 3
-	} else if isVersion {
-		url.Path = "/version"
-		url.RawQuery = ""
-		return *url
 	} else {
 		// this should not happen that the only two possibilities are /api... and /apis..., just want to put an
 		// outlet here in case more API groups are added in future if ever possible:
@@ -554,92 +554,33 @@ func (r Request) finalURLTemplate() url.URL {
 			segments[index+3] = "{name}"
 		}
 	}
-	url.Path = strings.Join(segments, "/")
+	url.Path = path.Join(trimmedBasePath, path.Join(segments...))
 	return *url
 }
 
-func (r *Request) tryThrottle(ctx context.Context) error {
+func (r *Request) tryThrottle() error {
 	if r.rateLimiter == nil {
 		return nil
 	}
 
 	now := time.Now()
-
-	err := r.rateLimiter.Wait(ctx)
-
-	latency := time.Since(now)
-	if latency > longThrottleLatency {
-		klog.V(3).Infof("Throttling request took %v, request: %s:%s", latency, r.verb, r.URL().String())
+	var err error
+	if r.ctx != nil {
+		err = r.rateLimiter.Wait(r.ctx)
+	} else {
+		r.rateLimiter.Accept()
 	}
-	if latency > extraLongThrottleLatency {
-		// If the rate limiter latency is very high, the log message should be printed at a higher log level,
-		// but we use a throttled logger to prevent spamming.
-		globalThrottledLogger.Infof("Throttling request took %v, request: %s:%s", latency, r.verb, r.URL().String())
+
+	if latency := time.Since(now); latency > longThrottleLatency {
+		klog.V(4).Infof("Throttling request took %v, request: %s:%s", latency, r.verb, r.URL().String())
 	}
-	metrics.RateLimiterLatency.Observe(r.verb, r.finalURLTemplate(), latency)
 
 	return err
 }
 
-type throttleSettings struct {
-	logLevel       klog.Level
-	minLogInterval time.Duration
-
-	lastLogTime time.Time
-	lock        sync.RWMutex
-}
-
-type throttledLogger struct {
-	clock    utilclock.PassiveClock
-	settings []*throttleSettings
-}
-
-var globalThrottledLogger = &throttledLogger{
-	clock: utilclock.RealClock{},
-	settings: []*throttleSettings{
-		{
-			logLevel:       2,
-			minLogInterval: 1 * time.Second,
-		}, {
-			logLevel:       0,
-			minLogInterval: 10 * time.Second,
-		},
-	},
-}
-
-func (b *throttledLogger) attemptToLog() (klog.Level, bool) {
-	for _, setting := range b.settings {
-		if bool(klog.V(setting.logLevel)) {
-			// Return early without write locking if possible.
-			if func() bool {
-				setting.lock.RLock()
-				defer setting.lock.RUnlock()
-				return b.clock.Since(setting.lastLogTime) >= setting.minLogInterval
-			}() {
-				setting.lock.Lock()
-				defer setting.lock.Unlock()
-				if b.clock.Since(setting.lastLogTime) >= setting.minLogInterval {
-					setting.lastLogTime = b.clock.Now()
-					return setting.logLevel, true
-				}
-			}
-			return -1, false
-		}
-	}
-	return -1, false
-}
-
-// Infof will write a log message at each logLevel specified by the reciever's throttleSettings
-// as long as it hasn't written a log message more recently than minLogInterval.
-func (b *throttledLogger) Infof(message string, args ...interface{}) {
-	if logLevel, ok := b.attemptToLog(); ok {
-		klog.V(logLevel).Infof(message, args...)
-	}
-}
-
 // Watch attempts to begin watching the requested location.
 // Returns a watch.Interface, or an error.
-func (r *Request) Watch(ctx context.Context) (watch.Interface, error) {
+func (r *Request) Watch() (watch.Interface, error) {
 	// We specifically don't want to rate limit watches, so we
 	// don't use r.rateLimiter here.
 	if r.err != nil {
@@ -651,7 +592,9 @@ func (r *Request) Watch(ctx context.Context) (watch.Interface, error) {
 	if err != nil {
 		return nil, err
 	}
-	req = req.WithContext(ctx)
+	if r.ctx != nil {
+		req = req.WithContext(r.ctx)
+	}
 	req.Header = r.headers
 	client := r.c.Client
 	if client == nil {
@@ -726,12 +669,12 @@ func updateURLMetrics(req *Request, resp *http.Response, err error) {
 // Returns io.ReadCloser which could be used for streaming of the response, or an error
 // Any non-2xx http status code causes an error.  If we get a non-2xx code, we try to convert the body into an APIStatus object.
 // If we can, we return that as an error.  Otherwise, we create an error that lists the http status and the content of the response.
-func (r *Request) Stream(ctx context.Context) (io.ReadCloser, error) {
+func (r *Request) Stream() (io.ReadCloser, error) {
 	if r.err != nil {
 		return nil, r.err
 	}
 
-	if err := r.tryThrottle(ctx); err != nil {
+	if err := r.tryThrottle(); err != nil {
 		return nil, err
 	}
 
@@ -743,7 +686,9 @@ func (r *Request) Stream(ctx context.Context) (io.ReadCloser, error) {
 	if r.body != nil {
 		req.Body = ioutil.NopCloser(r.body)
 	}
-	req = req.WithContext(ctx)
+	if r.ctx != nil {
+		req = req.WithContext(r.ctx)
+	}
 	req.Header = r.headers
 	client := r.c.Client
 	if client == nil {
@@ -811,7 +756,7 @@ func (r *Request) requestPreflightCheck() error {
 // received. It handles retry behavior and up front validation of requests. It will invoke
 // fn at most once. It will return an error if a problem occurred prior to connecting to the
 // server - the provided function is responsible for handling server errors.
-func (r *Request) request(ctx context.Context, fn func(*http.Request, *http.Response)) error {
+func (r *Request) request(fn func(*http.Request, *http.Response)) error {
 	//Metrics for total request latency
 	start := time.Now()
 	defer func() {
@@ -832,30 +777,26 @@ func (r *Request) request(ctx context.Context, fn func(*http.Request, *http.Resp
 		client = http.DefaultClient
 	}
 
-	// Throttle the first try before setting up the timeout configured on the
-	// client. We don't want a throttled client to return timeouts to callers
-	// before it makes a single request.
-	if err := r.tryThrottle(ctx); err != nil {
-		return err
-	}
-
-	if r.timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, r.timeout)
-		defer cancel()
-	}
-
 	// Right now we make about ten retry attempts if we get a Retry-After response.
 	maxRetries := 10
 	retries := 0
 	for {
-
 		url := r.URL().String()
 		req, err := http.NewRequest(r.verb, url, r.body)
 		if err != nil {
 			return err
 		}
-		req = req.WithContext(ctx)
+		if r.timeout > 0 {
+			if r.ctx == nil {
+				r.ctx = context.Background()
+			}
+			var cancelFn context.CancelFunc
+			r.ctx, cancelFn = context.WithTimeout(r.ctx, r.timeout)
+			defer cancelFn()
+		}
+		if r.ctx != nil {
+			req = req.WithContext(r.ctx)
+		}
 		req.Header = r.headers
 
 		r.backoff.Sleep(r.backoff.CalculateBackoff(r.URL()))
@@ -863,7 +804,7 @@ func (r *Request) request(ctx context.Context, fn func(*http.Request, *http.Resp
 			// We are retrying the request that we already send to apiserver
 			// at least once before.
 			// This request should also be throttled with the client-internal rate limiter.
-			if err := r.tryThrottle(ctx); err != nil {
+			if err := r.tryThrottle(); err != nil {
 				return err
 			}
 		}
@@ -875,24 +816,19 @@ func (r *Request) request(ctx context.Context, fn func(*http.Request, *http.Resp
 			r.backoff.UpdateBackoff(r.URL(), err, resp.StatusCode)
 		}
 		if err != nil {
-			// "Connection reset by peer" or "apiserver is shutting down" are usually a transient errors.
+			// "Connection reset by peer" is usually a transient error.
 			// Thus in case of "GET" operations, we simply retry it.
 			// We are not automatically retrying "write" operations, as
 			// they are not idempotent.
-			if r.verb != "GET" {
+			if !net.IsConnectionReset(err) || r.verb != "GET" {
 				return err
 			}
-			// For connection errors and apiserver shutdown errors retry.
-			if net.IsConnectionReset(err) || net.IsProbableEOF(err) {
-				// For the purpose of retry, we set the artificial "retry-after" response.
-				// TODO: Should we clean the original response if it exists?
-				resp = &http.Response{
-					StatusCode: http.StatusInternalServerError,
-					Header:     http.Header{"Retry-After": []string{"1"}},
-					Body:       ioutil.NopCloser(bytes.NewReader([]byte{})),
-				}
-			} else {
-				return err
+			// For the purpose of retry, we set the artificial "retry-after" response.
+			// TODO: Should we clean the original response if it exists?
+			resp = &http.Response{
+				StatusCode: http.StatusInternalServerError,
+				Header:     http.Header{"Retry-After": []string{"1"}},
+				Body:       ioutil.NopCloser(bytes.NewReader([]byte{})),
 			}
 		}
 
@@ -938,9 +874,13 @@ func (r *Request) request(ctx context.Context, fn func(*http.Request, *http.Resp
 // Error type:
 //  * If the server responds with a status: *errors.StatusError or *errors.UnexpectedObjectError
 //  * http.Client.Do errors are returned directly.
-func (r *Request) Do(ctx context.Context) Result {
+func (r *Request) Do() Result {
+	if err := r.tryThrottle(); err != nil {
+		return Result{err: err}
+	}
+
 	var result Result
-	err := r.request(ctx, func(req *http.Request, resp *http.Response) {
+	err := r.request(func(req *http.Request, resp *http.Response) {
 		result = r.transformResponse(resp, req)
 	})
 	if err != nil {
@@ -950,9 +890,13 @@ func (r *Request) Do(ctx context.Context) Result {
 }
 
 // DoRaw executes the request but does not process the response body.
-func (r *Request) DoRaw(ctx context.Context) ([]byte, error) {
+func (r *Request) DoRaw() ([]byte, error) {
+	if err := r.tryThrottle(); err != nil {
+		return nil, err
+	}
+
 	var result Result
-	err := r.request(ctx, func(req *http.Request, resp *http.Response) {
+	err := r.request(func(req *http.Request, resp *http.Response) {
 		result.body, result.err = ioutil.ReadAll(resp.Body)
 		glogBody("Response Body", result.body)
 		if resp.StatusCode < http.StatusOK || resp.StatusCode > http.StatusPartialContent {
