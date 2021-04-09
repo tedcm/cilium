@@ -22,8 +22,6 @@ import (
 	"path"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"github.com/cilium/cilium/pkg/backoff"
 	cilium_v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	clientset "github.com/cilium/cilium/pkg/k8s/client/clientset/versioned"
@@ -503,20 +501,16 @@ func updateStatusesByCapabilities(client clientset.Interface, capabilities k8sve
 		// CiliumNetworkPolicy
 		if ns == "" {
 			_, err = client.CiliumV2().CiliumClusterwideNetworkPolicies().Patch(
-				context.TODO(),
 				name,
 				k8sTypes.JSONPatchType,
 				createStatusAndNodePatchJSON,
-				metav1.PatchOptions{},
 				"status",
 			)
 		} else {
 			_, err = client.CiliumV2().CiliumNetworkPolicies(ns).Patch(
-				context.TODO(),
 				name,
 				k8sTypes.JSONPatchType,
 				createStatusAndNodePatchJSON,
-				metav1.PatchOptions{},
 				"status",
 			)
 		}
@@ -563,20 +557,16 @@ func updateStatusesByCapabilities(client clientset.Interface, capabilities k8sve
 				// Again for clusterwide policy we need to handle the update appropriately.
 				if ns == "" {
 					_, err = client.CiliumV2().CiliumClusterwideNetworkPolicies().Patch(
-						context.TODO(),
 						name,
 						k8sTypes.JSONPatchType,
 						createStatusAndNodePatchJSON,
-						metav1.PatchOptions{},
 						"status",
 					)
 				} else {
 					_, err = client.CiliumV2().CiliumNetworkPolicies(ns).Patch(
-						context.TODO(),
 						name,
 						k8sTypes.JSONPatchType,
 						createStatusAndNodePatchJSON,
-						metav1.PatchOptions{},
 						"status",
 					)
 				}
@@ -607,9 +597,9 @@ func updateStatusesByCapabilities(client clientset.Interface, capabilities k8sve
 				CiliumNetworkPolicy: cnp.CiliumNetworkPolicy,
 				Status:              cnp.CiliumNetworkPolicy.Status,
 			}
-			_, err = client.CiliumV2().CiliumClusterwideNetworkPolicies().UpdateStatus(context.TODO(), ccnp, metav1.UpdateOptions{})
+			_, err = client.CiliumV2().CiliumClusterwideNetworkPolicies().UpdateStatus(ccnp)
 		} else {
-			_, err = client.CiliumV2().CiliumNetworkPolicies(ns).UpdateStatus(context.TODO(), cnp.CiliumNetworkPolicy, metav1.UpdateOptions{})
+			_, err = client.CiliumV2().CiliumNetworkPolicies(ns).UpdateStatus(cnp.CiliumNetworkPolicy)
 		}
 
 	default:
@@ -627,9 +617,9 @@ func updateStatusesByCapabilities(client clientset.Interface, capabilities k8sve
 				CiliumNetworkPolicy: cnp.CiliumNetworkPolicy,
 				Status:              cnp.CiliumNetworkPolicy.Status,
 			}
-			_, err = client.CiliumV2().CiliumClusterwideNetworkPolicies().UpdateStatus(context.TODO(), ccnp, metav1.UpdateOptions{})
+			_, err = client.CiliumV2().CiliumClusterwideNetworkPolicies().UpdateStatus(ccnp)
 		} else {
-			_, err = client.CiliumV2().CiliumNetworkPolicies(ns).UpdateStatus(context.TODO(), cnp.CiliumNetworkPolicy, metav1.UpdateOptions{})
+			_, err = client.CiliumV2().CiliumNetworkPolicies(ns).UpdateStatus(cnp.CiliumNetworkPolicy)
 		}
 	}
 	if err != nil {

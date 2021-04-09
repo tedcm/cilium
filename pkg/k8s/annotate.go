@@ -84,7 +84,7 @@ func updateNodeAnnotation(c kubernetes.Interface, nodeName string, encryptKey ui
 	}
 	patch := []byte(fmt.Sprintf(`{"metadata":{"annotations":%s}}`, raw))
 
-	_, err = c.CoreV1().Nodes().Patch(context.TODO(), nodeName, types.StrategicMergePatchType, patch, v1.PatchOptions{})
+	_, err = c.CoreV1().Nodes().Patch(nodeName, types.StrategicMergePatchType, patch)
 
 	return err
 }
@@ -125,7 +125,7 @@ func (k8sCli K8sClient) GetSecrets(ctx context.Context, ns, name string) (map[st
 		return nil, fmt.Errorf("GetSecrets: No k8s, cannot access k8s secrets")
 	}
 
-	result, err := k8sCli.CoreV1().Secrets(ns).Get(ctx, name, v1.GetOptions{})
+	result, err := k8sCli.CoreV1().Secrets(ns).Get(name, v1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}

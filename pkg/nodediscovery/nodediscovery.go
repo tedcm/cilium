@@ -247,7 +247,7 @@ func (n *NodeDiscovery) UpdateCiliumNodeResource() {
 
 	for retryCount := 0; retryCount < maxRetryCount; retryCount++ {
 		performUpdate := true
-		nodeResource, err := ciliumClient.CiliumV2().CiliumNodes().Get(context.TODO(), nodeTypes.GetName(), metav1.GetOptions{})
+		nodeResource, err := ciliumClient.CiliumV2().CiliumNodes().Get(nodeTypes.GetName(), metav1.GetOptions{})
 		if err != nil {
 			performUpdate = false
 			nodeResource = &ciliumv2.CiliumNode{
@@ -260,7 +260,7 @@ func (n *NodeDiscovery) UpdateCiliumNodeResource() {
 		n.mutateNodeResource(nodeResource)
 
 		if performUpdate {
-			if _, err := ciliumClient.CiliumV2().CiliumNodes().Update(context.TODO(), nodeResource, metav1.UpdateOptions{}); err != nil {
+			if _, err := ciliumClient.CiliumV2().CiliumNodes().Update(nodeResource); err != nil {
 				if errors.IsConflict(err) {
 					log.WithError(err).Warn("Unable to update CiliumNode resource, will retry")
 					continue
@@ -270,7 +270,7 @@ func (n *NodeDiscovery) UpdateCiliumNodeResource() {
 				return
 			}
 		} else {
-			if _, err = ciliumClient.CiliumV2().CiliumNodes().Create(context.TODO(), nodeResource, metav1.CreateOptions{}); err != nil {
+			if _, err = ciliumClient.CiliumV2().CiliumNodes().Create(nodeResource); err != nil {
 				if errors.IsConflict(err) {
 					log.WithError(err).Warn("Unable to create CiliumNode resource, will retry")
 					continue

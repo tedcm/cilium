@@ -123,9 +123,8 @@ func enableCiliumEndpointSyncGC(once bool) {
 					scopedLog.Debug("Orphaned CiliumEndpoint is being garbage collected")
 					PropagationPolicy := meta_v1.DeletePropagationBackground // because these are const strings but the API wants pointers
 					err := ciliumClient.CiliumEndpoints(cep.Namespace).Delete(
-						ctx,
 						cep.Name,
-						meta_v1.DeleteOptions{PropagationPolicy: &PropagationPolicy})
+						&meta_v1.DeleteOptions{PropagationPolicy: &PropagationPolicy})
 					if err != nil && !k8serrors.IsNotFound(err) {
 						scopedLog.WithError(err).Warning("Unable to delete orphaned CEP")
 						return err

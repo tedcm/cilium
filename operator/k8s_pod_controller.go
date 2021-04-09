@@ -81,7 +81,7 @@ func enableUnmanagedKubeDNSController() {
 								}
 
 								log.Infof("Restarting unmanaged kube-dns pod %s started %s ago", podID, age)
-								if err := k8s.Client().CoreV1().Pods(pod.Namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{}); err != nil {
+								if err := k8s.Client().CoreV1().Pods(pod.Namespace).Delete(pod.Name, &metav1.DeleteOptions{}); err != nil {
 									log.WithError(err).Warningf("Unable to restart pod %s", podID)
 								} else {
 									lastPodRestart[podID] = time.Now()

@@ -15,15 +15,12 @@
 package ipam
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"reflect"
 	"strconv"
 	"sync"
 	"time"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	eniTypes "github.com/cilium/cilium/pkg/aws/eni/types"
 	"github.com/cilium/cilium/pkg/cidr"
@@ -354,9 +351,9 @@ func (n *nodeStore) refreshNode() error {
 	ciliumClient := k8s.CiliumClient()
 	switch {
 	case k8sCapabilities.UpdateStatus:
-		_, err = ciliumClient.CiliumV2().CiliumNodes().UpdateStatus(context.TODO(), node, metav1.UpdateOptions{})
+		_, err = ciliumClient.CiliumV2().CiliumNodes().UpdateStatus(node)
 	default:
-		_, err = ciliumClient.CiliumV2().CiliumNodes().Update(context.TODO(), node, metav1.UpdateOptions{})
+		_, err = ciliumClient.CiliumV2().CiliumNodes().Update(node)
 	}
 
 	return err

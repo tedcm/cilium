@@ -46,9 +46,8 @@ func deleteIdentity(ctx context.Context, identity *v2.CiliumIdentity) error {
 		return err
 	}
 	err = ciliumK8sClient.CiliumV2().CiliumIdentities().Delete(
-		ctx,
 		identity.Name,
-		metav1.DeleteOptions{
+		&metav1.DeleteOptions{
 			Preconditions: &metav1.Preconditions{
 				UID:             &identity.UID,
 				ResourceVersion: &identity.ResourceVersion,

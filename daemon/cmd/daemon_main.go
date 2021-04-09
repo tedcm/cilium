@@ -1721,7 +1721,6 @@ func (in *interfaceNumberGetter) GetMACByInterfaceNumber(ifaceNum int) (string, 
 
 func (in *interfaceNumberGetter) fetchFromK8s(name string) (*v2.CiliumNode, error) {
 	return k8s.CiliumClient().CiliumV2().CiliumNodes().Get(
-		context.TODO(),
 		nodeTypes.GetName(),
 		v1.GetOptions{},
 	)

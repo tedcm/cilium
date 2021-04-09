@@ -213,7 +213,7 @@ func ParseNode(k8sNode *slim_corev1.Node, source source.Source) *nodeTypes.Node 
 // kubernetes api server
 func GetNode(c kubernetes.Interface, nodeName string) (*corev1.Node, error) {
 	// Try to retrieve node's cidr and addresses from k8s's configuration
-	return c.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
+	return c.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
 }
 
 // setNodeNetworkUnavailableFalse sets Kubernetes NodeNetworkUnavailable to
@@ -233,7 +233,7 @@ func setNodeNetworkUnavailableFalse(c kubernetes.Interface, nodeName string) err
 		return err
 	}
 	patch := []byte(fmt.Sprintf(`{"status":{"conditions":%s}}`, raw))
-	_, err = c.CoreV1().Nodes().PatchStatus(context.TODO(), nodeName, patch)
+	_, err = c.CoreV1().Nodes().PatchStatus(nodeName, patch)
 	return err
 }
 

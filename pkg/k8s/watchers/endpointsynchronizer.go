@@ -145,7 +145,7 @@ func (epSync *EndpointSynchronizer) RunK8sCiliumEndpointSync(e *endpoint.Endpoin
 					}
 
 					scopedLog.Debug("Getting CEP during an initialization")
-					localCEP, err = ciliumClient.CiliumEndpoints(namespace).Get(ctx, podName, meta_v1.GetOptions{})
+					localCEP, err = ciliumClient.CiliumEndpoints(namespace).Get(podName, meta_v1.GetOptions{})
 					// It's only an error if it exists but something else happened
 					switch {
 					case k8serrors.IsNotFound(err):
@@ -171,7 +171,7 @@ func (epSync *EndpointSynchronizer) RunK8sCiliumEndpointSync(e *endpoint.Endpoin
 								},
 							},
 						}
-						localCEP, err = ciliumClient.CiliumEndpoints(namespace).Create(ctx, cep, meta_v1.CreateOptions{})
+						localCEP, err = ciliumClient.CiliumEndpoints(namespace).Create(cep)
 						if err != nil {
 							// Suppress logging an error if ep backing the pod was terminated
 							// before CEP could be created and shut down the controller.
@@ -200,7 +200,7 @@ func (epSync *EndpointSynchronizer) RunK8sCiliumEndpointSync(e *endpoint.Endpoin
 				// This is unexpected as there should be only 1 writer per CEP, this
 				// controller, and the localCEP created on startup will be used.
 				if localCEP == nil {
-					localCEP, err = ciliumClient.CiliumEndpoints(namespace).Get(ctx, podName, meta_v1.GetOptions{})
+					localCEP, err = ciliumClient.CiliumEndpoints(namespace).Get(podName, meta_v1.GetOptions{})
 					switch {
 					// The CEP doesn't exist in k8s. This is unexpetected but may occur
 					// if the endpoint was removed from k8s but not yet within the agent.
@@ -244,10 +244,9 @@ func (epSync *EndpointSynchronizer) RunK8sCiliumEndpointSync(e *endpoint.Endpoin
 						return err
 					}
 					localCEP, err = ciliumClient.CiliumEndpoints(namespace).Patch(
-						ctx, podName,
+						podName,
 						types.JSONPatchType,
 						createStatusPatch,
-						meta_v1.PatchOptions{},
 						"status")
 				default:
 					// We have an object to reuse. Update and push it up. In the case of an
@@ -257,9 +256,9 @@ func (epSync *EndpointSynchronizer) RunK8sCiliumEndpointSync(e *endpoint.Endpoin
 					mdl.DeepCopyInto(&localCEP.Status)
 					switch {
 					case capabilities.UpdateStatus:
-						localCEP, err = ciliumClient.CiliumEndpoints(namespace).UpdateStatus(ctx, localCEP, meta_v1.UpdateOptions{})
+						localCEP, err = ciliumClient.CiliumEndpoints(namespace).UpdateStatus(localCEP)
 					default:
-						localCEP, err = ciliumClient.CiliumEndpoints(namespace).Update(ctx, localCEP, meta_v1.UpdateOptions{})
+						localCEP, err = ciliumClient.CiliumEndpoints(namespace).Update(localCEP)
 					}
 				}
 
@@ -340,7 +339,7 @@ func deleteCEP(ctx context.Context, scopedLog *logrus.Entry, ciliumClient v2.Cil
 		scopedLog.Debug("Skipping CiliumEndpoint deletion because it has no k8s namespace")
 		return nil
 	}
-	if err := ciliumClient.CiliumEndpoints(namespace).Delete(ctx, podName, meta_v1.DeleteOptions{}); err != nil {
+	if err := ciliumClient.CiliumEndpoints(namespace).Delete(podName, &meta_v1.DeleteOptions{}); err != nil {
 		if !k8serrors.IsNotFound(err) {
 			scopedLog.WithError(err).Warning("Unable to delete CEP")
 		}

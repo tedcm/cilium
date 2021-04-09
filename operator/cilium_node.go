@@ -15,8 +15,6 @@
 package main
 
 import (
-	"context"
-
 	"github.com/cilium/cilium/pkg/ipam/allocator"
 	"github.com/cilium/cilium/pkg/k8s"
 	"github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
@@ -89,7 +87,7 @@ func startSynchronizingCiliumNodes(apiextensionsK8sClient apiextensionsclientset
 }
 
 func deleteCiliumNode(nodeManager *allocator.NodeEventHandler, name string) {
-	if err := ciliumK8sClient.CiliumV2().CiliumNodes().Delete(context.TODO(), name, metav1.DeleteOptions{}); err == nil {
+	if err := ciliumK8sClient.CiliumV2().CiliumNodes().Delete(name, &metav1.DeleteOptions{}); err == nil {
 		log.WithField("name", name).Info("Removed CiliumNode after receiving node deletion event")
 	}
 	if nodeManager != nil {
@@ -100,11 +98,11 @@ func deleteCiliumNode(nodeManager *allocator.NodeEventHandler, name string) {
 type ciliumNodeUpdateImplementation struct{}
 
 func (c *ciliumNodeUpdateImplementation) Create(node *v2.CiliumNode) (*v2.CiliumNode, error) {
-	return ciliumK8sClient.CiliumV2().CiliumNodes().Create(context.TODO(), node, metav1.CreateOptions{})
+	return ciliumK8sClient.CiliumV2().CiliumNodes().Create( node)
 }
 
 func (c *ciliumNodeUpdateImplementation) Get(node string) (*v2.CiliumNode, error) {
-	return ciliumK8sClient.CiliumV2().CiliumNodes().Get(context.TODO(), node, metav1.GetOptions{})
+	return ciliumK8sClient.CiliumV2().CiliumNodes().Get(node, metav1.GetOptions{})
 }
 
 func (c *ciliumNodeUpdateImplementation) UpdateStatus(origNode, node *v2.CiliumNode) (*v2.CiliumNode, error) {
@@ -113,11 +111,11 @@ func (c *ciliumNodeUpdateImplementation) UpdateStatus(origNode, node *v2.CiliumN
 	switch {
 	case k8sCapabilities.UpdateStatus:
 		if origNode == nil || !origNode.Status.DeepEqual(&node.Status) {
-			return ciliumK8sClient.CiliumV2().CiliumNodes().UpdateStatus(context.TODO(), node, metav1.UpdateOptions{})
+			return ciliumK8sClient.CiliumV2().CiliumNodes().UpdateStatus(node)
 		}
 	default:
 		if origNode == nil || !origNode.Status.DeepEqual(&node.Status) {
-			return ciliumK8sClient.CiliumV2().CiliumNodes().Update(context.TODO(), node, metav1.UpdateOptions{})
+			return ciliumK8sClient.CiliumV2().CiliumNodes().Update(node)
 		}
 	}
 
@@ -130,11 +128,11 @@ func (c *ciliumNodeUpdateImplementation) Update(origNode, node *v2.CiliumNode) (
 	switch {
 	case k8sCapabilities.UpdateStatus:
 		if origNode == nil || !origNode.Spec.DeepEqual(&node.Spec) {
-			return ciliumK8sClient.CiliumV2().CiliumNodes().Update(context.TODO(), node, metav1.UpdateOptions{})
+			return ciliumK8sClient.CiliumV2().CiliumNodes().Update( node)
 		}
 	default:
 		if origNode == nil || !origNode.DeepEqual(node) {
-			return ciliumK8sClient.CiliumV2().CiliumNodes().Update(context.TODO(), node, metav1.UpdateOptions{})
+			return ciliumK8sClient.CiliumV2().CiliumNodes().Update(node)
 		}
 	}
 
@@ -142,5 +140,5 @@ func (c *ciliumNodeUpdateImplementation) Update(origNode, node *v2.CiliumNode) (
 }
 
 func (c *ciliumNodeUpdateImplementation) Delete(nodeName string) error {
-	return ciliumK8sClient.CiliumV2().CiliumNodes().Delete(context.TODO(), nodeName, metav1.DeleteOptions{})
+	return ciliumK8sClient.CiliumV2().CiliumNodes().Delete(nodeName, &metav1.DeleteOptions{})
 }

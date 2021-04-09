@@ -76,7 +76,7 @@ func retrieveNodeInformation(nodeName string) (*nodeTypes.Node, error) {
 	var n *nodeTypes.Node
 
 	if option.Config.IPAM == ipamOption.IPAMClusterPool {
-		ciliumNode, err := CiliumClient().CiliumV2().CiliumNodes().Get(context.TODO(), nodeName, v1.GetOptions{})
+		ciliumNode, err := CiliumClient().CiliumV2().CiliumNodes().Get(nodeName, v1.GetOptions{})
 		if err != nil {
 			// If no CIDR is required, retrieving the node information is
 			// optional
@@ -158,7 +158,7 @@ func Init(conf k8sconfig.Configuration) error {
 		// For this reason we have picked to perform a get on `/healthz` instead a get of a node.
 		//
 		// [0] https://github.com/kubernetes/kubernetes/blob/v1.17.3/pkg/kubelet/kubelet_node_status.go#L423
-		res := k8sRestClient.Get().Resource("healthz").Do(ctx)
+		res := k8sRestClient.Get().Resource("healthz").Do()
 		return res.Error()
 	}
 

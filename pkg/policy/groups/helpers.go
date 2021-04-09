@@ -170,31 +170,31 @@ func denyEgressRule() *api.Rule {
 
 func updateOrCreateCNP(cnp *cilium_v2.CiliumNetworkPolicy) (*cilium_v2.CiliumNetworkPolicy, error) {
 	k8sCNP, err := k8s.CiliumClient().CiliumV2().CiliumNetworkPolicies(cnp.ObjectMeta.Namespace).
-		Get(context.TODO(), cnp.ObjectMeta.Name, v1.GetOptions{})
+		Get(cnp.ObjectMeta.Name, v1.GetOptions{})
 	if err == nil {
 		k8sCNP.ObjectMeta.Labels = cnp.ObjectMeta.Labels
 		k8sCNP.Spec = cnp.Spec
 		k8sCNP.Specs = cnp.Specs
 		k8sCNP.Status = cilium_v2.CiliumNetworkPolicyStatus{}
-		return k8s.CiliumClient().CiliumV2().CiliumNetworkPolicies(cnp.ObjectMeta.Namespace).Update(context.TODO(), k8sCNP, v1.UpdateOptions{})
+		return k8s.CiliumClient().CiliumV2().CiliumNetworkPolicies(cnp.ObjectMeta.Namespace).Update(k8sCNP)
 	}
-	return k8s.CiliumClient().CiliumV2().CiliumNetworkPolicies(cnp.ObjectMeta.Namespace).Create(context.TODO(), cnp, v1.CreateOptions{})
+	return k8s.CiliumClient().CiliumV2().CiliumNetworkPolicies(cnp.ObjectMeta.Namespace).Create(cnp)
 }
 
 func updateOrCreateCCNP(ccnp *cilium_v2.CiliumClusterwideNetworkPolicy) (*cilium_v2.CiliumClusterwideNetworkPolicy, error) {
 	k8sCCNP, err := k8s.CiliumClient().CiliumV2().CiliumClusterwideNetworkPolicies().
-		Get(context.TODO(), ccnp.ObjectMeta.Name, v1.GetOptions{})
+		Get(ccnp.ObjectMeta.Name, v1.GetOptions{})
 	if err == nil {
 		k8sCCNP.ObjectMeta.Labels = ccnp.ObjectMeta.Labels
 		k8sCCNP.Spec = ccnp.Spec
 		k8sCCNP.Specs = ccnp.Specs
 		k8sCCNP.Status = cilium_v2.CiliumNetworkPolicyStatus{}
 
-		return k8s.CiliumClient().CiliumV2().CiliumClusterwideNetworkPolicies().Update(context.TODO(), k8sCCNP, v1.UpdateOptions{})
+		return k8s.CiliumClient().CiliumV2().CiliumClusterwideNetworkPolicies().Update(k8sCCNP)
 	}
 
 	return k8s.CiliumClient().CiliumV2().CiliumClusterwideNetworkPolicies().
-		Create(context.TODO(), ccnp, v1.CreateOptions{})
+		Create(ccnp)
 }
 
 func updateDerivativeStatus(cnp *cilium_v2.CiliumNetworkPolicy, derivativeName string, err error, clusterScoped bool) error {
@@ -222,7 +222,7 @@ func updateDerivativeCNPStatus(cnp *cilium_v2.CiliumNetworkPolicy, status cilium
 	// This CNP can be modified by cilium agent or operator. To be able to push
 	// the status correctly fetch the last version to avoid updates issues.
 	k8sCNP, clientErr := k8s.CiliumClient().CiliumV2().CiliumNetworkPolicies(cnp.ObjectMeta.Namespace).
-		Get(context.TODO(), cnp.ObjectMeta.Name, v1.GetOptions{})
+		Get(cnp.ObjectMeta.Name, v1.GetOptions{})
 
 	if clientErr != nil {
 		return fmt.Errorf("cannot get Kubernetes policy: %v", clientErr)
@@ -241,7 +241,7 @@ func updateDerivativeCNPStatus(cnp *cilium_v2.CiliumNetworkPolicy, status cilium
 
 	// TODO: Switch to JSON patch.
 	_, err := k8s.CiliumClient().CiliumV2().CiliumNetworkPolicies(cnp.ObjectMeta.Namespace).
-		UpdateStatus(context.TODO(), k8sCNP, v1.UpdateOptions{})
+		UpdateStatus( k8sCNP)
 
 	return err
 }
@@ -249,7 +249,7 @@ func updateDerivativeCNPStatus(cnp *cilium_v2.CiliumNetworkPolicy, status cilium
 func updateDerivativeCCNPStatus(cnp *cilium_v2.CiliumNetworkPolicy, status cilium_v2.CiliumNetworkPolicyNodeStatus,
 	derivativeName string) error {
 	k8sCCNP, clientErr := k8s.CiliumClient().CiliumV2().CiliumClusterwideNetworkPolicies().
-		Get(context.TODO(), cnp.ObjectMeta.Name, v1.GetOptions{})
+		Get(cnp.ObjectMeta.Name, v1.GetOptions{})
 
 	if clientErr != nil {
 		return fmt.Errorf("cannot get Kubernetes policy: %v", clientErr)
@@ -276,7 +276,7 @@ func updateDerivativeCCNPStatus(cnp *cilium_v2.CiliumNetworkPolicy, status ciliu
 
 	// TODO: Switch to JSON patch
 	_, err := k8s.CiliumClient().CiliumV2().CiliumClusterwideNetworkPolicies().
-		UpdateStatus(context.TODO(), k8sCCNP, v1.UpdateOptions{})
+		UpdateStatus(k8sCCNP)
 
 	return err
 

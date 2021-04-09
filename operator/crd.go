@@ -38,11 +38,11 @@ func waitForCRD(ctx context.Context, client clientset.Interface, name string) er
 	w := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			options.FieldSelector = selector
-			return client.ApiextensionsV1beta1().CustomResourceDefinitions().List(ctx, options)
+			return client.ApiextensionsV1beta1().CustomResourceDefinitions().List(options)
 		},
 		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
 			options.FieldSelector = selector
-			return client.ApiextensionsV1beta1().CustomResourceDefinitions().Watch(ctx, options)
+			return client.ApiextensionsV1beta1().CustomResourceDefinitions().Watch(options)
 		},
 	}
 	cond := func(ev watch.Event) (bool, error) {

@@ -17,7 +17,6 @@
 package version
 
 import (
-	"context"
 	"fmt"
 
 	k8sconfig "github.com/cilium/cilium/pkg/k8s/config"
@@ -173,7 +172,7 @@ func endpointSlicesFallbackDiscovery(client kubernetes.Interface) error {
 	//
 	// Here we acknowledge the lack of discovery ability as non Fatal and fall back to probing
 	// the API directly.
-	_, err := client.DiscoveryV1beta1().EndpointSlices("default").Get(context.TODO(), "kubernetes", metav1.GetOptions{})
+	_, err := client.DiscoveryV1beta1().EndpointSlices("default").Get("kubernetes", metav1.GetOptions{})
 	if err == nil {
 		cached.mutex.Lock()
 		cached.capabilities.EndpointSlice = true
@@ -214,7 +213,7 @@ func leasesFallbackDiscovery(client kubernetes.Interface, conf k8sconfig.Configu
 	// Similar to endpointSlicesFallbackDiscovery here we fallback to probing the Kubernetes
 	// API directly. `kube-controller-manager` creates a lease in the kube-system namespace
 	// and here we try and see if that Lease exists.
-	_, err := client.CoordinationV1().Leases("kube-system").Get(context.TODO(), "kube-controller-manager", metav1.GetOptions{})
+	_, err := client.CoordinationV1().Leases("kube-system").Get("kube-controller-manager", metav1.GetOptions{})
 	if err == nil {
 		cached.mutex.Lock()
 		cached.capabilities.LeasesResourceLock = true

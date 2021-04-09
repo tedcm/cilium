@@ -105,7 +105,7 @@ func (c *crdBackend) AllocateID(ctx context.Context, id idpool.ID, key allocator
 		SecurityLabels: key.GetAsMap(),
 	}
 
-	_, err := c.Client.CiliumV2().CiliumIdentities().Create(ctx, identity, metav1.CreateOptions{})
+	_, err := c.Client.CiliumV2().CiliumIdentities().Create(identity)
 	return err
 }
 

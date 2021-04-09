@@ -112,7 +112,7 @@ func validateNPResources(
 	shortName string,
 ) error {
 	// check if the crd is installed at all
-	_, err := apiExtensionsClient.ApiextensionsV1beta1().CustomResourceDefinitions().Get(ctx, name+"."+ciliumGroup, metav1.GetOptions{})
+	_, err := apiExtensionsClient.ApiextensionsV1beta1().CustomResourceDefinitions().Get(name+"."+ciliumGroup, metav1.GetOptions{})
 	switch {
 	case err == nil:
 	case k8sErrors.IsNotFound(err):
@@ -138,7 +138,7 @@ func validateNPResources(
 			Get().
 			VersionedParams(&opts, scheme.ParameterCodec).
 			Resource(name).
-			Do(ctx).
+			Do().
 			Into(&cnps)
 		if err != nil {
 			return err
