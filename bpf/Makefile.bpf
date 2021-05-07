@@ -32,10 +32,16 @@ LLC   ?= llc
 HOST_CC    ?= gcc
 HOST_STRIP ?= strip
 
+ifeq ($(IMAGE_CROSS_TARGET_PLATFORM),linux/arm64)
+  HOST_CC = aarch64-linux-gnu-gcc
+  HOST_STRIP = aarch64-linux-gnu-strip
+endif
+
 # Define all at the top here so that Makefiles which include this one will hit
 # the 'all' target first (which we expect to be overridden by the includer).
 all:
 
+.PHONY: $(BUILD_PERMUTATIONS_DEP)
 $(BUILD_PERMUTATIONS_DEP):
 	@touch $(BUILD_PERMUTATIONS_DEP)
 
@@ -49,24 +55,34 @@ force:
 	@$(ECHO_CC)
 	$(QUIET) ${LLC} $(LLC_FLAGS) -filetype=asm -o $@ $(patsubst %.s,%.ll,$@)
 
+checkpatch:
+	@$(ECHO_CHECK) "(checkpatch)"
+	$(QUIET) $(CONTAINER_ENGINE) container run --rm \
+		--workdir /workspace \
+		--volume $(CURDIR)/..:/workspace \
+		--user "$(shell id -u):$(shell id -g)" \
+		cilium/cilium-checkpatch:e6a6843cef50a43c38819badb55a21061967ce64
+
 coccicheck:
 	$(QUIET) $(foreach TARGET,$(shell find $(ROOT_DIR)/contrib/coccinelle/ -name '*.cocci'), \
 		spatch --no-show-diff --sp-file ${TARGET} --include-headers --very-quiet --dir . ; )
 
-check: coccicheck
+check: coccicheck checkpatch
 	@$(ECHO_CHECK)/*.c
 	$(QUIET) sparse -Wsparse-all ${FLAGS} $(ROOT_DIR)/$(RELATIVE_DIR)/*.c
 	$(QUIET) $(CLANG) ${CLANG_FLAGS} --analyze $(ROOT_DIR)/$(RELATIVE_DIR)/*.c
 	$(QUIET) $(foreach SUBDIR,$(SUBDIRS), \
-		$(MAKE) $(SUBMAKEOPTS) -C $(SUBDIR) $@)
+		$(MAKE) $(SUBMAKEOPTS) -C $(SUBDIR) $@ &&) true
 
 preprocess: $(LIB)
 	$(QUIET) $(foreach TARGET,$(shell find $(ROOT_DIR)/$(RELATIVE_DIR)/ -name 'bpf_*.c'), \
 		echo "  GEN   $(patsubst %.c,%.i,${TARGET})"; \
 		${CLANG} $(FLAGS) -E -target bpf -c ${TARGET} -o $(patsubst %.c,%.i,${TARGET}); )
 	$(QUIET) $(foreach SUBDIR,$(SUBDIRS), \
-		$(MAKE) $(SUBMAKEOPTS) -C $(SUBDIR) $@)
+		$(MAKE) $(SUBMAKEOPTS) -C $(SUBDIR) $@ &&) true
 
 assembly: $(BPF_C) $(LIB) $(BPF_ASM)
 	$(QUIET) $(foreach SUBDIR,$(SUBDIRS), \
-		$(MAKE) $(SUBMAKEOPTS) -C $(SUBDIR) $@)
+		$(MAKE) $(SUBMAKEOPTS) -C $(SUBDIR) $@ &&) true
+
+.PHONY: all force checkpatch coccicheck check preprocess assembly

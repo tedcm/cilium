@@ -4,6 +4,12 @@
 SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
 
+# define a function replacing spaces with commas in a list
+empty :=
+space := $(empty) $(empty)
+comma := ,
+join-with-comma = $(subst $(space),$(comma),$(strip $1))
+
 ROOT_DIR := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 RELATIVE_DIR := $(shell echo $(realpath .) | sed "s;$(ROOT_DIR)[/]*;;")
 include $(ROOT_DIR)/Makefile.quiet
@@ -16,6 +22,7 @@ LIBDIR?=$(PREFIX)/lib
 LOCALSTATEDIR?=/var
 RUNDIR?=/var/run
 CONFDIR?=/etc
+export GOARCH ?= $(shell $(GO) env GOARCH)
 
 INSTALL = install
 
@@ -23,12 +30,12 @@ CONTAINER_ENGINE?=docker
 
 # Set DOCKER_DEV_ACCOUNT with "cilium" by default
 ifeq ($(DOCKER_DEV_ACCOUNT),)
-    DOCKER_DEV_ACCOUNT="cilium"
+    DOCKER_DEV_ACCOUNT=cilium
 endif
 
 # Set DOCKER_IMAGE_TAG with "latest" by default
 ifeq ($(DOCKER_IMAGE_TAG),)
-    DOCKER_IMAGE_TAG="latest"
+    DOCKER_IMAGE_TAG=latest
 endif
 
 ifeq ($(shell uname -m),aarch64)
@@ -48,6 +55,8 @@ GO_BUILD_FLAGS =
 GO_TEST_FLAGS =
 GO_CLEAN_FLAGS =
 GO_BUILD_LDFLAGS =
+# go build/test -tags values
+GO_TAGS_FLAGS = osusergo
 
 # This is declared here as it is needed to change the covermode depending on if
 # RACE is specified.
@@ -57,37 +66,42 @@ VERSION = $(shell cat $(dir $(lastword $(MAKEFILE_LIST)))/VERSION)
 VERSION_MAJOR = $(shell cat $(dir $(lastword $(MAKEFILE_LIST)))/VERSION | cut -d. -f1)
 # Use git only if in a Git repo
 ifneq ($(wildcard $(dir $(lastword $(MAKEFILE_LIST)))/.git),)
-	GIT_VERSION = $(shell git show -s --format='format:%h %aI')
+    GIT_VERSION = $(shell git show -s --format='format:%h %aI')
 else
-	GIT_VERSION = $(shell cat $(ROOT_DIR)/GIT_VERSION)
+    GIT_VERSION = $(shell cat $(ROOT_DIR)/GIT_VERSION)
 endif
 FULL_BUILD_VERSION = $(VERSION) $(GIT_VERSION)
 GO_BUILD_LDFLAGS += -X "github.com/cilium/cilium/pkg/version.ciliumVersion=$(FULL_BUILD_VERSION)"
 
 ifeq ($(NOSTRIP),)
-	# Note: these options will not remove annotations needed for stack
-	# traces, so panic backtraces will still be readable.
-	#
-	# -w: Omit the DWARF symbol table.
-	# -s: Omit the symbol table and debug information.
-	GO_BUILD_LDFLAGS += -s -w
+    # Note: these options will not remove annotations needed for stack
+    # traces, so panic backtraces will still be readable.
+    #
+    # -w: Omit the DWARF symbol table.
+    # -s: Omit the symbol table and debug information.
+    GO_BUILD_LDFLAGS += -s -w
 endif
 
-CILIUM_ENVOY_SHA=$(shell grep -o "FROM.*cilium/cilium-envoy:[0-9a-fA-F]*" $(ROOT_DIR)/Dockerfile | cut -d : -f 2)
-GO_BUILD_LDFLAGS += -X "github.com/cilium/cilium/pkg/envoy.RequiredEnvoyVersionSHA=$(CILIUM_ENVOY_SHA)"
+ifneq ($(wildcard $(dir $(lastword $(MAKEFILE_LIST)))/images/cilium/Dockerfile),)
+    CILIUM_ENVOY_REF=$(shell sed -E -e 's/^FROM (--[^ ]* )*([^ ]*) as cilium-envoy/\2/p;d' < $(ROOT_DIR)/images/cilium/Dockerfile)
+    CILIUM_ENVOY_SHA=$(shell echo $(CILIUM_ENVOY_REF) | sed -E -e 's/[^/]*\/[^:]*:([^:@]*).*/\1/p;d')
+    GO_BUILD_LDFLAGS += -X "github.com/cilium/cilium/pkg/envoy.RequiredEnvoyVersionSHA=$(CILIUM_ENVOY_SHA)"
+endif
 
-# Use git only if in a Git repo, otherwise depend on file BPF_SRCFILES existing
+# Use git only if in a Git repo, otherwise find the files from the file system
+BPF_SRCFILES_IGNORE = bpf/.gitignore
 ifneq ($(wildcard $(dir $(lastword $(MAKEFILE_LIST)))/.git),)
-	BPF_FILES_EVAL = $(shell git ls-files $(ROOT_DIR)/bpf/ | grep -v .gitignore | tr "\n" ' ')
-	BPF_FILES ?= $(BPF_FILES_EVAL)
-	BPF_SRCFILES := $(subst ../,,$(BPF_FILES))
+    BPF_SRCFILES := $(shell git ls-files $(ROOT_DIR)/bpf/ | LC_ALL=C sort | tr "\n" ' ')
 else
-	BPF_SRCFILES = $(shell cat $(ROOT_DIR)/BPF_SRCFILES)
+    # this line has to be in-sync with bpf/.gitignore, please note usage of make patterns like `%.i`
+    BPF_SRCFILES_IGNORE += bpf/cilium-map-migrate bpf/cilium-probe-kernel-hz bpf/%.i bpf/%.s bpf/.rebuild_all
+    BPF_SRCFILES := $(shell find $(ROOT_DIR)/bpf/ -type f | LC_ALL=C sort | tr "\n" ' ')
 endif
 
-# Use BPF_SRCFILES as BPF_FILES is not available in the buildkit context
-CILIUM_DATAPATH_SHA=$(shell cd $(ROOT_DIR); cat $(BPF_SRCFILES) | sha1sum | awk '{print $$1}')
-GO_BUILD_LDFLAGS += -X "github.com/cilium/cilium/pkg/datapath/loader.DatapathSHA=$(CILIUM_DATAPATH_SHA)"
+# ROOT_DIR can be either `../` or absolute path, each of these need to be stripped
+BPF_SRCFILES := $(filter-out $(BPF_SRCFILES_IGNORE),$(subst ../,,$(subst $(ROOT_DIR)/,,$(BPF_SRCFILES))))
+CILIUM_DATAPATH_SHA256=$(shell cd $(ROOT_DIR); cat $(BPF_SRCFILES) | sha256sum | awk '{print $$1}')
+GO_BUILD_LDFLAGS += -X "github.com/cilium/cilium/pkg/datapath/loader.DatapathSHA256=$(CILIUM_DATAPATH_SHA256)"
 
 # Set -mod=vendor if running >= go 1.13 or if GO111MODULE is set.
 # A go build is being executed with go modules if:
@@ -99,7 +113,7 @@ ifeq ($(GO111MODULE),on)
     GO_TEST_FLAGS += -mod=vendor
     GO_CLEAN_FLAGS += -mod=vendor
 else
-    GO_MAJOR_VERSION_GE_1 := $(shell expr `$(GO) version | grep -E 'go[0-9]{1}+' -o | sed 's/go//g'` \>= 1)
+    GO_MAJOR_VERSION_GE_1 := $(shell expr `$(GO) version | grep -E 'go[0-9]+' -o | sed 's/go//g'` \>= 1)
     ifeq ($(GO_MAJOR_VERSION_GE_1),1)
         GO_MINOR_VERSION_GE_13 := $(shell expr `$(GO) version | grep -E 'go[^ ]+' -o | sed 's/go1.//g'` \>= 13)
         ifeq ($(GO_MINOR_VERSION_GE_13),1)
@@ -110,9 +124,13 @@ else
     endif
 endif
 
-
 GO_BUILD = CGO_ENABLED=0 $(GO) build
-GO_BUILD_WITH_CGO = CGO_ENABLED=1 $(GO) build
+# Currently crosscompiling only enabled for arm64 targets
+CGO_CC =
+ifeq ($(GOARCH),arm64)
+    CGO_CC = CC=aarch64-linux-gnu-gcc
+endif
+GO_BUILD_WITH_CGO = CGO_ENABLED=1 $(CGO_CC) $(GO) build
 
 ifneq ($(RACE),)
     GO_BUILD_FLAGS += -race
@@ -121,22 +139,33 @@ ifneq ($(RACE),)
 
     # GO_BUILD becomes GO_BUILD_WITH_CGO as `-race` requires CGO
     GO_BUILD = $(GO_BUILD_WITH_CGO)
+    ifeq ($(LOCKDEBUG),)
+        LOCKDEBUG=1
+    endif
 else
     GOTEST_COVER_OPTS += -covermode=count
 endif
 
 ifneq ($(LOCKDEBUG),)
-    GO_BUILD_FLAGS += -tags lockdebug
-    GO_TEST_FLAGS += -tags lockdebug
+    GO_TAGS_FLAGS += lockdebug
 endif
 
-GO_BUILD_FLAGS += -ldflags '$(GO_BUILD_LDFLAGS) $(EXTRA_GO_BUILD_LDFLAGS)' $(EXTRA_GO_BUILD_FLAGS)
+GO_BUILD_FLAGS += -ldflags '$(GO_BUILD_LDFLAGS) $(EXTRA_GO_BUILD_LDFLAGS)' -tags=$(call join-with-comma,$(GO_TAGS_FLAGS)) $(EXTRA_GO_BUILD_FLAGS)
+GO_TEST_FLAGS += -tags=$(call join-with-comma,$(GO_TAGS_FLAGS))
+
+ifeq ($(NOOPT),1)
+    GO_BUILD_FLAGS += -gcflags="all=-N -l"
+endif
 
 GO_BUILD += $(GO_BUILD_FLAGS)
 GO_BUILD_WITH_CGO += $(GO_BUILD_FLAGS)
 
 GO_TEST = $(GO) test $(GO_TEST_FLAGS)
-GO_CLEAN = $(GO) clean $(GO_TEST_FLAGS)
+GO_CLEAN = $(GO) clean $(GO_CLEAN_FLAGS)
 # TODO: remove `GO111MODULE=off` once Go 1.13 is deprecated by Go maintainers
 GO_VET = GO111MODULE=off $(GO) vet
 GO_LIST = GO111MODULE=off $(GO) list
+
+ifeq ($(BASE_IMAGE),)
+    BASE_IMAGE=scratch
+endif
