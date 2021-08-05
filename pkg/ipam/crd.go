@@ -55,7 +55,7 @@ var (
 const (
 	// customResourceUpdateRate is the maximum rate in which a custom
 	// resource is updated
-	customResourceUpdateRate = 15 * time.Second
+	customResourceUpdateRate = 2 * time.Second
 
 	fieldName = "name"
 )
