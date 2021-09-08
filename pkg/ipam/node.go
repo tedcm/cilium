@@ -7,6 +7,9 @@ package ipam
 import (
 	"context"
 	"fmt"
+	"github.com/cilium/cilium/operator/watchers"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/tools/cache"
 	"time"
 
 	"github.com/cilium/cilium/pkg/defaults"
@@ -584,6 +587,26 @@ func (n *Node) maintainIPPool(ctx context.Context) error {
 
 	// Release excess addresses
 	if a.release != nil && len(a.release.IPsToRelease) > 0 {
+		var ipsToRelease []string
+		// Since, the default CRD sync interval is 15 secs, there might be new allocations that aren't reflected in
+		// the ciliumnode object yet. Verify against pod cache to check if any of the IPs are in use.
+		for _, ip := range a.release.IPsToRelease {
+			if watchers.PodStore == nil {
+				scopedLog.Warnf("Pod store un-initialized")
+				continue
+			}
+			values, err := watchers.PodStore.(cache.Indexer).ByIndex(watchers.PodIpIndex, ip)
+			if err != nil {
+				scopedLog.WithError(err).Error("Unable to access pod store index")
+				continue
+			}
+			if len(values) == 0 {
+				ipsToRelease = append(ipsToRelease, ip)
+				continue
+			}
+			scopedLog.Warnf("IP %s still in use for pod %s, not releasing", ip, values[0].(corev1.Pod).Name)
+		}
+		a.release.IPsToRelease = ipsToRelease
 		err := n.ops.ReleaseIPs(ctx, a.release)
 		if err == nil {
 			n.manager.metricsAPI.AddIPRelease(string(a.release.PoolID), int64(len(a.release.IPsToRelease)))
