@@ -18,7 +18,6 @@ import (
 	"github.com/cilium/cilium/pkg/k8s/informer"
 	slim_corev1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/core/v1"
 	slim_metav1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
-
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -26,6 +25,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 )
+
+const PodIpIndex = "pod-ip"
 
 var (
 	// PodStore has a minimal copy of all pods running in the cluster.
@@ -47,15 +48,26 @@ var (
 	UnmanagedPodStoreSynced = make(chan struct{})
 )
 
+// podIpIndexFunc indexes pods by IP address.
+func podIpIndexFunc(obj interface{}) ([]string, error) {
+	pod := obj.(*slim_corev1.Pod)
+	if pod.Status.PodIP != "" {
+		return []string{pod.Status.PodIP}, nil
+	}
+	return []string{}, nil
+}
+
 func PodsInit(k8sClient kubernetes.Interface, stopCh <-chan struct{}) {
 	var podInformer cache.Controller
-	PodStore, podInformer = informer.NewInformer(
+	PodStore = cache.NewIndexer(cache.DeletionHandlingMetaNamespaceKeyFunc, cache.Indexers{PodIpIndex: podIpIndexFunc})
+	podInformer = informer.NewInformerWithStore(
 		cache.NewListWatchFromClient(k8sClient.CoreV1().RESTClient(),
 			"pods", v1.NamespaceAll, fields.Everything()),
 		&slim_corev1.Pod{},
 		0,
 		cache.ResourceEventHandlerFuncs{},
 		convertToPod,
+		PodStore,
 	)
 	go podInformer.Run(stopCh)
 

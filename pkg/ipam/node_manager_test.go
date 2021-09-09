@@ -21,9 +21,12 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/cilium/cilium/operator/watchers"
+	"github.com/cilium/cilium/pkg/ipam/fake"
 	metricsmock "github.com/cilium/cilium/pkg/ipam/metrics/mock"
 	ipamTypes "github.com/cilium/cilium/pkg/ipam/types"
 	v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
+	v1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/core/v1"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/math"
 	"github.com/cilium/cilium/pkg/testutils"
@@ -31,6 +34,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"gopkg.in/check.v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/cache"
 )
 
 var (
@@ -387,6 +391,69 @@ func (e *IPAMSuite) TestNodeManagerMinAllocateAndPreallocate(c *check.C) {
 	c.Assert(node.Stats().UsedIPs, check.Equals, 8)
 }
 
+func MockQueryByIpIndex(ip string) func(indexName string, indexedValue string) ([]interface{}, error) {
+	return func(indexName, indexedValue string) ([]interface{}, error) {
+		if indexName == watchers.PodIpIndex && indexedValue == ip {
+			return []interface{}{v1.Pod{}}, nil
+		}
+		return []interface{}{}, nil
+	}
+}
+
+// TestNodeManagerIPInUse verifies that IPs are not de-allocated while they're still in use by pods in the cluster.
+func (e *IPAMSuite) TestNodeManagerIPInUse(c *check.C) {
+	fakeCs := fake.Indexer{
+		Store: &cache.FakeCustomStore{},
+		//Mocks the existence of IP "1" in pod store. We'll use this to verify that IP "1" is not released while still in use.
+		ByIndexFunc: MockQueryByIpIndex("1"),
+	}
+	var _ cache.Indexer = (*fake.Indexer)(nil)
+
+	watchers.PodStore = fakeCs
+
+	am := newAllocationImplementationMock()
+	mngr, err := NewNodeManager(am, k8sapi, metricsapi, 10, true)
+	c.Assert(err, check.IsNil)
+	c.Assert(mngr, check.Not(check.IsNil))
+
+	// Announce node, wait for IPs to become available
+	cn := newCiliumNode("node1", 4, 4, 0)
+	cn.Spec.IPAM.MaxAboveWatermark = 2
+	mngr.Update(cn)
+	c.Assert(testutils.WaitUntil(func() bool { return reachedAddressesNeeded(mngr, "node1", 0) }, 1*time.Second), check.IsNil)
+
+	node := mngr.Get("node1")
+	c.Assert(node, check.Not(check.IsNil))
+	c.Assert(node.Stats().AvailableIPs, check.Equals, 6)
+	c.Assert(node.Stats().UsedIPs, check.Equals, 0)
+
+	// Use 3 IPs, 3 additional IPs should be allocated
+	mngr.Update(updateCiliumNode(cn, 3))
+	c.Assert(testutils.WaitUntil(func() bool { return reachedAddressesNeeded(mngr, "node1", 0) }, 5*time.Second), check.IsNil)
+	node = mngr.Get("node1")
+	c.Assert(node, check.Not(check.IsNil))
+	c.Assert(node.Stats().AvailableIPs, check.Equals, 9)
+	c.Assert(node.Stats().UsedIPs, check.Equals, 3)
+
+	// Free 2 IPs, 2 excess IPs should show up. They're only released at interval based resync, so expect timeout here
+	mngr.Update(updateCiliumNode(cn, 1))
+	c.Assert(testutils.WaitUntil(func() bool { return reachedAddressesNeeded(mngr, "node1", 0) }, 2*time.Second), check.Not(check.IsNil))
+	node = mngr.Get("node1")
+	c.Assert(node, check.Not(check.IsNil))
+	c.Assert(node.Stats().AvailableIPs, check.Equals, 9)
+	c.Assert(node.Stats().UsedIPs, check.Equals, 1)
+
+	// Trigger resync manually. Excess IPs should be released and available IPs should be 8 not 7 because IP "1" is still in use.
+	node = mngr.Get("node1")
+	syncTime := mngr.instancesAPI.Resync(context.TODO())
+	mngr.resyncNode(context.TODO(), node, &resyncStats{}, syncTime)
+	c.Assert(testutils.WaitUntil(func() bool { return reachedAddressesNeeded(mngr, "node1", -1) }, 5*time.Second), check.IsNil)
+	node = mngr.Get("node1")
+	c.Assert(node, check.Not(check.IsNil))
+	c.Assert(node.Stats().AvailableIPs, check.Equals, 8)
+	c.Assert(node.Stats().UsedIPs, check.Equals, 1)
+}
+
 // TestNodeManagerReleaseAddress tests PreAllocate, MinAllocate and MaxAboveWatermark
 // when release excess IP is enabled
 //
@@ -394,6 +461,11 @@ func (e *IPAMSuite) TestNodeManagerMinAllocateAndPreallocate(c *check.C) {
 // - PreAllocate 4
 // - MaxAboveWatermark 4
 func (e *IPAMSuite) TestNodeManagerReleaseAddress(c *check.C) {
+	fakeCs := fake.Indexer{
+		Store: &cache.FakeCustomStore{},
+	}
+
+	watchers.PodStore = fakeCs
 	am := newAllocationImplementationMock()
 	c.Assert(am, check.Not(check.IsNil))
 	mngr, err := NewNodeManager(am, k8sapi, metricsapi, 10, true)
