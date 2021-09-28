@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"time"
 
+	operatorOption "github.com/cilium/cilium/operator/option"
 	"github.com/cilium/cilium/operator/watchers"
 	"github.com/cilium/cilium/pkg/aws/eni/limits"
 	"github.com/cilium/cilium/pkg/defaults"
@@ -27,6 +28,7 @@ import (
 	ipamTypes "github.com/cilium/cilium/pkg/ipam/types"
 	v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	v1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/core/v1"
+	k8sUtils "github.com/cilium/cilium/pkg/k8s/utils"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/math"
@@ -106,6 +108,10 @@ type Node struct {
 	// retry is the trigger used to retry pool maintenance while the
 	// instances API is unstable
 	retry *trigger.Trigger
+
+	// Excess IPs from a cilium node would be released only after a delay configured by excess-ip-release-delay flag.
+	// ipsMarkedForRelease tracks the IP and the timestamp at which it was marked for release.
+	ipsMarkedForRelease map[string]time.Time
 }
 
 // Statistics represent the IP allocation statistics of a node
@@ -533,15 +539,6 @@ func (n *Node) determineMaintenanceAction() (*maintenanceAction, error) {
 	// request may have been resolved in the meantime.
 	if n.manager.releaseExcessIPs && stats.ExcessIPs > 0 {
 		a.release = n.ops.PrepareIPRelease(stats.ExcessIPs, scopedLog)
-		scopedLog = scopedLog.WithFields(logrus.Fields{
-			"available":         stats.AvailableIPs,
-			"used":              stats.UsedIPs,
-			"excess":            stats.ExcessIPs,
-			"releasing":         a.release.IPsToRelease,
-			"selectedInterface": a.release.InterfaceID,
-			"selectedPoolID":    a.release.PoolID,
-		})
-		scopedLog.Info("Releasing excess IPs from node")
 		return a, nil
 	}
 
@@ -599,31 +596,84 @@ func (n *Node) maintainIPPool(ctx context.Context) error {
 
 	scopedLog := n.logger()
 
-	// Release excess addresses
-	if a.release != nil && len(a.release.IPsToRelease) > 0 {
-		var ipsToRelease []string
-		// Since, the default CRD sync interval is 15 secs, there might be new allocations that aren't reflected in
-		// the ciliumnode object yet. Verify against pod cache to check if any of the IPs are in use.
-		for _, ip := range a.release.IPsToRelease {
+	// Attempt to release if :
+	// * IP is still marked for release in the current iteration's a.release.IPsToRelease
+	// * Marked for release for more than excess-ip-release-delay seconds
+	// * IP is not in use by any pod according to pod informer cache
+	var ipsToRelease []string
+	if n.ipsMarkedForRelease != nil && len(n.ipsMarkedForRelease) > 0 {
+		if a.release == nil || len(a.release.IPsToRelease) == 0 {
+			n.ipsMarkedForRelease = make(map[string]time.Time)
+		}
+		for markedIp, ts := range n.ipsMarkedForRelease {
+			stillMarkedForRelease := false
+			for _, ip := range a.release.IPsToRelease {
+				if markedIp == ip {
+					stillMarkedForRelease = true
+					break
+				}
+			}
+			if !stillMarkedForRelease {
+				delete(n.ipsMarkedForRelease, markedIp)
+				continue
+			}
+			// Check if the IP release waiting period elapsed
+			if ts.Add(time.Duration(operatorOption.Config.ExcessIPReleaseDelay) * time.Second).After(time.Now()) {
+				continue
+			}
+			// Since, the agent's default CRD sync interval is 15 secs, there might be new allocations that aren't
+			// reflected in the ciliumnode object yet. Verify against pod cache to check if the IPs is in use.
 			if watchers.PodStore == nil {
 				scopedLog.Warnf("Pod store un-initialized")
 				continue
 			}
-			values, err := watchers.PodStore.(cache.Indexer).ByIndex(watchers.PodIpIndex, ip)
+			values, err := watchers.PodStore.(cache.Indexer).ByIndex(watchers.PodIpIndex, markedIp)
 			if err != nil {
 				scopedLog.WithError(err).Error("Unable to access pod store index")
 				continue
 			}
 			if len(values) != 0 {
-				scopedLog.Warnf("IP %s still in use for pod %s, not releasing", ip, values[0].(v1.Pod).Name)
-				continue
+				pod := values[0].(v1.Pod)
+				// Pods in "Failed" and "Succeeded" phases don't necessarily receive delete events.
+				// But their IPs can be released safely.
+				if k8sUtils.IsPodRunning(pod.Status) {
+					scopedLog.Warnf("IP %s still in use for pod %s, not releasing", markedIp, pod.Name)
+					continue
+				}
 			}
-			ipsToRelease = append(ipsToRelease, ip)
+			ipsToRelease = append(ipsToRelease, markedIp)
 		}
+	}
+
+	// Add entries from this iteration to ipsMarkedForRelease
+	releaseTS := time.Now()
+	if a.release != nil && a.release.IPsToRelease != nil {
+		for _, ip := range a.release.IPsToRelease {
+			if _, ok := n.ipsMarkedForRelease[ip]; !ok {
+				n.ipsMarkedForRelease[ip] = releaseTS
+			}
+		}
+	}
+
+	if len(ipsToRelease) > 0 {
 		a.release.IPsToRelease = ipsToRelease
+		scopedLog = scopedLog.WithFields(logrus.Fields{
+			"available":         n.stats.AvailableIPs,
+			"used":              n.stats.UsedIPs,
+			"excess":            n.stats.ExcessIPs,
+			"releasing":         a.release.IPsToRelease,
+			"selectedInterface": a.release.InterfaceID,
+			"selectedPoolID":    a.release.PoolID,
+		})
+		scopedLog.Info("Releasing excess IPs from node")
 		err := n.ops.ReleaseIPs(ctx, a.release)
 		if err == nil {
 			n.manager.metricsAPI.AddIPRelease(string(a.release.PoolID), int64(len(a.release.IPsToRelease)))
+
+			// Remove the IPs from ipsMarkedForRelease
+			for _, ip := range ipsToRelease {
+				delete(n.ipsMarkedForRelease, ip)
+			}
 			return nil
 		}
 		n.manager.metricsAPI.IncAllocationAttempt("ip unassignment failed", string(a.release.PoolID))

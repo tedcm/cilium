@@ -326,5 +326,8 @@ func init() {
 	flags.String(option.K8sServiceProxyName, "", "Value of K8s service-proxy-name label for which Cilium handles the services (empty = all services without service.kubernetes.io/service-proxy-name label)")
 	option.BindEnv(option.K8sServiceProxyName)
 
+	flags.Int(operatorOption.ExcessIPReleaseDelay, 120, "Number of seconds operator would wait before it releases an IP previously marked as excess. Defaults to 120")
+	option.BindEnv(operatorOption.ExcessIPReleaseDelay)
+
 	viper.BindPFlags(flags)
 }

@@ -141,6 +141,10 @@ const (
 	// the number of API calls to AWS EC2 service.
 	AWSReleaseExcessIPs = "aws-release-excess-ips"
 
+	// ExcessIPReleaseDelay controls how long operator would wait before an IP previously marked as excess is released.
+	// Defaults to 120 secs
+	ExcessIPReleaseDelay = "excess-ip-release-delay"
+
 	// ENITags are the tags that will be added to every ENI created by the
 	// AWS ENI IPAM.
 	ENITags = "eni-tags"
@@ -298,6 +302,10 @@ type OperatorConfig struct {
 	// the number of API calls to AWS EC2 service.
 	AWSReleaseExcessIPs bool
 
+	// ExcessIPReleaseDelay controls how long operator would wait before an IP previously marked as excess is released.
+	// Defaults to 120 secs
+	ExcessIPReleaseDelay int
+
 	// UpdateEC2AdapterLimitViaAPI configures the operator to use the EC2 API to fill out the instnacetype to adapter limit mapping
 	UpdateEC2AdapterLimitViaAPI bool
 
@@ -357,6 +365,7 @@ func (c *OperatorConfig) Populate() {
 	c.LeaderElectionLeaseDuration = viper.GetDuration(LeaderElectionLeaseDuration)
 	c.LeaderElectionRenewDeadline = viper.GetDuration(LeaderElectionRenewDeadline)
 	c.LeaderElectionRetryPeriod = viper.GetDuration(LeaderElectionRetryPeriod)
+	c.ExcessIPReleaseDelay = viper.GetInt(ExcessIPReleaseDelay)
 
 	// AWS options
 

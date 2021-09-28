@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"time"
 
+	operatorOption "github.com/cilium/cilium/operator/option"
 	"github.com/cilium/cilium/operator/watchers"
 	"github.com/cilium/cilium/pkg/ipam/fake"
 	metricsmock "github.com/cilium/cilium/pkg/ipam/metrics/mock"
@@ -402,6 +403,7 @@ func MockQueryByIpIndex(ip string) func(indexName string, indexedValue string) (
 
 // TestNodeManagerIPInUse verifies that IPs are not de-allocated while they're still in use by pods in the cluster.
 func (e *IPAMSuite) TestNodeManagerIPInUse(c *check.C) {
+	operatorOption.Config.ExcessIPReleaseDelay = 3
 	fakeCs := fake.Indexer{
 		Store: &cache.FakeCustomStore{},
 		//Mocks the existence of IP "1" in pod store. We'll use this to verify that IP "1" is not released while still in use.
@@ -461,6 +463,7 @@ func (e *IPAMSuite) TestNodeManagerIPInUse(c *check.C) {
 // - PreAllocate 4
 // - MaxAboveWatermark 4
 func (e *IPAMSuite) TestNodeManagerReleaseAddress(c *check.C) {
+	operatorOption.Config.ExcessIPReleaseDelay = 3
 	fakeCs := fake.Indexer{
 		Store: &cache.FakeCustomStore{},
 	}
