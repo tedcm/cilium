@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"time"
 
+	operatorOption "github.com/cilium/cilium/operator/option"
 	"github.com/cilium/cilium/pkg/aws/eni/limits"
 	"github.com/cilium/cilium/pkg/defaults"
 	ipamOption "github.com/cilium/cilium/pkg/ipam/option"
@@ -103,6 +104,16 @@ type Node struct {
 	// retry is the trigger used to retry pool maintenance while the
 	// instances API is unstable
 	retry *trigger.Trigger
+
+	// Excess IPs from a cilium node would be marked for release only after a delay configured by excess-ip-release-delay
+	// flag. ipsMarkedForRelease tracks the IP and the timestamp at which it was marked for release.
+	ipsMarkedForRelease map[string]time.Time
+
+	// ipReleaseStatus tracks the state for every IP considered for release.
+	// 0 - IPAMMarkForRelease : Marked for Release
+	// 1 - IPAMReadyForRelease : Acknowledged as safe to release by agent
+	// 2 - IPAMDoNotRelease : Release request denied by agent
+	ipReleaseStatus map[string]uint8
 }
 
 // Statistics represent the IP allocation statistics of a node
@@ -263,7 +274,6 @@ func calculateNeededIPs(availableIPs, usedIPs, preAllocate, minAllocate, maxAllo
 	if neededIPs < 0 {
 		neededIPs = 0
 	}
-
 	return
 }
 
@@ -530,15 +540,6 @@ func (n *Node) determineMaintenanceAction() (*maintenanceAction, error) {
 	// request may have been resolved in the meantime.
 	if n.manager.releaseExcessIPs && stats.ExcessIPs > 0 {
 		a.release = n.ops.PrepareIPRelease(stats.ExcessIPs, scopedLog)
-		scopedLog = scopedLog.WithFields(logrus.Fields{
-			"available":         stats.AvailableIPs,
-			"used":              stats.UsedIPs,
-			"excess":            stats.ExcessIPs,
-			"releasing":         a.release.IPsToRelease,
-			"selectedInterface": a.release.InterfaceID,
-			"selectedPoolID":    a.release.PoolID,
-		})
-		scopedLog.Info("Releasing excess IPs from node")
 		return a, nil
 	}
 
@@ -594,13 +595,99 @@ func (n *Node) maintainIPPool(ctx context.Context) error {
 		return nil
 	}
 
+	if n.ipReleaseStatus == nil {
+		n.ipReleaseStatus = make(map[string]uint8)
+	}
+
+	// Update timestamps for IPs from this iteration
+	releaseTS := time.Now()
+	if a.release != nil && a.release.IPsToRelease != nil {
+		for _, ip := range a.release.IPsToRelease {
+			if _, ok := n.ipsMarkedForRelease[ip]; !ok {
+				n.ipsMarkedForRelease[ip] = releaseTS
+			}
+		}
+	}
 	scopedLog := n.logger()
 
-	// Release excess addresses
-	if a.release != nil && len(a.release.IPsToRelease) > 0 {
+	// Attempt to release if :
+	// * IP is still marked for release in the current iteration's a.release.IPsToRelease
+	// * Marked for release for more than excess-ip-release-delay seconds
+	// * IP is not in use by any pod according to pod informer cache
+	var ipsToMark []string
+	var ipsToRelease []string
+
+	if n.ipsMarkedForRelease == nil || a.release == nil || len(a.release.IPsToRelease) == 0 {
+		// Resetting ipsMarkedForRelease if there are no IPs to release in this iteration
+		n.ipsMarkedForRelease = make(map[string]time.Time)
+	}
+	for markedIP, ts := range n.ipsMarkedForRelease {
+		// Determine which IPs are still marked for release.
+		stillMarkedForRelease := false
+		for _, ip := range a.release.IPsToRelease {
+			if markedIP == ip {
+				stillMarkedForRelease = true
+				break
+			}
+		}
+		if !stillMarkedForRelease {
+			// n.determineMaintenanceAction() only returns the IPs on the interface with maximum number of IPs that
+			// can be freed up. If the selected interface changes or if this IP is not excess anymore, remove entry
+			// from local map and cilium node status if n.ipReleaseStatus is already updated.
+			// from n.ipReleaseStatus
+			delete(n.ipsMarkedForRelease, markedIP)
+			if _, ok := n.ipReleaseStatus[markedIP]; ok {
+				delete(n.ipReleaseStatus, markedIP)
+			}
+			continue
+		}
+		// Check if the IP release waiting period elapsed
+		if ts.Add(time.Duration(operatorOption.Config.ExcessIPReleaseDelay) * time.Second).After(time.Now()) {
+			continue
+		}
+		// Handle IPs we've already heard back from agent.
+		if n.resource.Status.IPAM.ReleaseIps != nil {
+			if status, ok := n.resource.Status.IPAM.ReleaseIps[markedIP]; ok {
+				switch status {
+				case ipamOption.IPAMReadyForRelease:
+					ipsToRelease = append(ipsToRelease, markedIP)
+				case ipamOption.IPAMDoNotRelease:
+					scopedLog.WithFields(logrus.Fields{"ip": markedIP}).Debug("IP release request denied from agent")
+					delete(n.ipsMarkedForRelease, markedIP)
+					delete(n.ipReleaseStatus, markedIP)
+				}
+				continue
+			}
+		}
+		ipsToMark = append(ipsToMark, markedIP)
+	}
+	// Update cilium node CRD with IPs that need to be marked for release
+	for _, ip := range ipsToMark {
+		scopedLog.WithFields(logrus.Fields{"ip": ip}).Debug("Marking IP for release")
+		n.ipReleaseStatus[ip] = ipamOption.IPAMMarkForRelease
+	}
+
+	if len(ipsToRelease) > 0 {
+		a.release.IPsToRelease = ipsToRelease
+		scopedLog = scopedLog.WithFields(logrus.Fields{
+			"available":         n.stats.AvailableIPs,
+			"used":              n.stats.UsedIPs,
+			"excess":            n.stats.ExcessIPs,
+			"excessIps":         a.release.IPsToRelease,
+			"releasing":         ipsToRelease,
+			"selectedInterface": a.release.InterfaceID,
+			"selectedPoolID":    a.release.PoolID,
+		})
+		scopedLog.Info("Releasing excess IPs from node")
 		err := n.ops.ReleaseIPs(ctx, a.release)
 		if err == nil {
 			n.manager.metricsAPI.AddIPRelease(string(a.release.PoolID), int64(len(a.release.IPsToRelease)))
+
+			// Remove the IPs from ipsMarkedForRelease
+			for _, ip := range ipsToRelease {
+				delete(n.ipsMarkedForRelease, ip)
+				delete(n.ipReleaseStatus, ip)
+			}
 			return nil
 		}
 		n.manager.metricsAPI.IncAllocationAttempt("ip unassignment failed", string(a.release.PoolID))
@@ -723,6 +810,18 @@ func (n *Node) syncToAPIServer() (err error) {
 		}
 
 		n.ops.PopulateStatusFields(node)
+
+		// update excess IP release data
+		releaseStatus := make(map[string]uint8)
+		for ip, status := range n.ipReleaseStatus{
+			// retain the status for IPs agent already responded to
+			if existingStatus, ok := node.Status.IPAM.ReleaseIps[ip]; ok{
+				releaseStatus[ip] = existingStatus
+				continue
+			}
+			releaseStatus[ip] = status
+		}
+		node.Status.IPAM.ReleaseIps = releaseStatus
 
 		origNode, node, err = n.update(origNode, node, retry, true)
 		if err == nil {

@@ -310,6 +310,48 @@ func (n *nodeStore) updateLocalNodeResource(node *ciliumv2.CiliumNode) {
 			}
 		}
 	}
+
+	// ACK or NACK IPs marked for release by the operator
+	for ip, status := range n.ownNode.Status.IPAM.ReleaseIps {
+		if status != ipamOption.IPAMMarkForRelease || n.ownNode.Spec.IPAM.Pool == nil {
+			continue
+		}
+		// NACK the IP, if this node doesn't own the IP
+		if _, ok := n.ownNode.Spec.IPAM.Pool[ip]; !ok {
+			n.ownNode.Status.IPAM.ReleaseIps[ip] = ipamOption.IPAMDoNotRelease
+			continue
+		}
+		// Retrieve the appropriate allocator
+		var allocator *crdAllocator
+		var ipFamily Family
+		if ipAddr := net.ParseIP(ip); ipAddr != nil {
+			if ipAddr.To4() != nil {
+				ipFamily = IPv4
+			} else {
+				ipFamily = IPv6
+			}
+		}
+		if ipFamily == "" {
+			continue
+		}
+		for _, a := range n.allocators {
+			if a.family == ipFamily {
+				allocator = a
+			}
+		}
+		if allocator == nil {
+			continue
+		}
+
+		allocator.mutex.Lock()
+		if _, ok := allocator.allocated[ip]; ok {
+			// IP still in use, update the operator to stop releasing the IP.
+			n.ownNode.Status.IPAM.ReleaseIps[ip] = ipamOption.IPAMDoNotRelease
+		} else {
+			n.ownNode.Status.IPAM.ReleaseIps[ip] = ipamOption.IPAMReadyForRelease
+		}
+		allocator.mutex.Unlock()
+	}
 }
 
 // refreshNodeTrigger is called to refresh the custom resource after taking the
@@ -380,6 +422,12 @@ func (n *nodeStore) allocate(ip net.IP) (*ipamTypes.AllocationIP, error) {
 
 	if n.ownNode.Spec.IPAM.Pool == nil {
 		return nil, fmt.Errorf("No IPs available")
+	}
+
+	if status, ok := n.ownNode.Status.IPAM.ReleaseIps[ip.String()]; ok {
+		if status == ipamOption.IPAMMarkForRelease || status == ipamOption.IPAMReadyForRelease {
+			return nil, fmt.Errorf("IP not available")
+		}
 	}
 
 	ipInfo, ok := n.ownNode.Spec.IPAM.Pool[ip.String()]

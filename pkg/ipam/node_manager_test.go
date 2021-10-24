@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build !privileged_tests
 // +build !privileged_tests
 
 package ipam
@@ -21,7 +22,9 @@ import (
 	"fmt"
 	"time"
 
+	operatorOption "github.com/cilium/cilium/operator/option"
 	metricsmock "github.com/cilium/cilium/pkg/ipam/metrics/mock"
+	ipamOption "github.com/cilium/cilium/pkg/ipam/option"
 	ipamTypes "github.com/cilium/cilium/pkg/ipam/types"
 	v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	"github.com/cilium/cilium/pkg/lock"
@@ -235,7 +238,8 @@ func newCiliumNode(node string, preAllocate, minAllocate, used int) *v2.CiliumNo
 		},
 		Status: v2.NodeStatus{
 			IPAM: ipamTypes.IPAMStatus{
-				Used: ipamTypes.AllocationMap{},
+				Used:       ipamTypes.AllocationMap{},
+				ReleaseIps: map[string]uint8{},
 			},
 		},
 	}
@@ -387,6 +391,14 @@ func (e *IPAMSuite) TestNodeManagerMinAllocateAndPreallocate(c *check.C) {
 	c.Assert(node.Stats().UsedIPs, check.Equals, 8)
 }
 
+func FakeAcknowledgeReleaseIps(cn *v2.CiliumNode) {
+	for ip, status := range cn.Status.IPAM.ReleaseIps {
+		if status == ipamOption.IPAMMarkForRelease {
+			cn.Status.IPAM.ReleaseIps[ip] = ipamOption.IPAMReadyForRelease
+		}
+	}
+}
+
 // TestNodeManagerReleaseAddress tests PreAllocate, MinAllocate and MaxAboveWatermark
 // when release excess IP is enabled
 //
@@ -394,6 +406,7 @@ func (e *IPAMSuite) TestNodeManagerMinAllocateAndPreallocate(c *check.C) {
 // - PreAllocate 4
 // - MaxAboveWatermark 4
 func (e *IPAMSuite) TestNodeManagerReleaseAddress(c *check.C) {
+	operatorOption.Config.ExcessIPReleaseDelay = 2
 	am := newAllocationImplementationMock()
 	c.Assert(am, check.Not(check.IsNil))
 	mngr, err := NewNodeManager(am, k8sapi, metricsapi, 10, true)
@@ -440,6 +453,12 @@ func (e *IPAMSuite) TestNodeManagerReleaseAddress(c *check.C) {
 	node = mngr.Get("node3")
 	syncTime := mngr.instancesAPI.Resync(context.TODO())
 	mngr.resyncNode(context.TODO(), node, &resyncStats{}, syncTime)
+
+	// Acknowledge release IPs after 3 secs
+	time.AfterFunc(3*time.Second, func() {
+		FakeAcknowledgeReleaseIps(node.resource)
+	})
+
 	c.Assert(testutils.WaitUntil(func() bool { return reachedAddressesNeeded(mngr, "node3", 0) }, 5*time.Second), check.IsNil)
 	node = mngr.Get("node3")
 	c.Assert(node, check.Not(check.IsNil))

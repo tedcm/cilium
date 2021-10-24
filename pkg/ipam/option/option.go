@@ -38,3 +38,9 @@ const (
 	// option.IPAM
 	IPAMClusterPool = "cluster-pool"
 )
+
+const (
+	IPAMMarkForRelease = iota
+	IPAMReadyForRelease
+	IPAMDoNotRelease
+)
