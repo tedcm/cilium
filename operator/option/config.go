@@ -142,7 +142,7 @@ const (
 	AWSReleaseExcessIPs = "aws-release-excess-ips"
 
 	// ExcessIPReleaseDelay controls how long operator would wait before an IP previously marked as excess is released.
-	// Defaults to 120 secs
+	// Defaults to 180 secs
 	ExcessIPReleaseDelay = "excess-ip-release-delay"
 
 	// ENITags are the tags that will be added to every ENI created by the
@@ -303,7 +303,7 @@ type OperatorConfig struct {
 	AWSReleaseExcessIPs bool
 
 	// ExcessIPReleaseDelay controls how long operator would wait before an IP previously marked as excess is released.
-	// Defaults to 120 secs
+	// Defaults to 180 secs
 	ExcessIPReleaseDelay int
 
 	// UpdateEC2AdapterLimitViaAPI configures the operator to use the EC2 API to fill out the instnacetype to adapter limit mapping

@@ -49,7 +49,6 @@ func (s *IPAMSuite) TestMarkForReleaseNoAllocate(c *C) {
 	for i := 1; i <= 4; i++ {
 		cn.Spec.IPAM.Pool[fmt.Sprintf("1.1.1.%d", i)] = dummyResource
 	}
-	cn.Spec.IPAM.Pool["1.1.1.4"] = dummyResource
 
 	fakeAddressing := fake.NewNodeAddressing()
 	conf := &testConfigurationCRD{}
