@@ -582,17 +582,18 @@ func (n *Node) determineMaintenanceAction() (*maintenanceAction, error) {
 	return a, nil
 }
 
-// maintainIPPool attempts to allocate or release all required IPs to fulfill
-// the needed gap.
-func (n *Node) maintainIPPool(ctx context.Context) error {
+// maintainIPPool attempts to allocate or release all required IPs to fulfill the needed gap.
+// returns instanceMutated which tracks if state changed with the cloud provider and is used
+// to determine if IPAM pool maintainer trigger func needs to be invoked.
+func (n *Node) maintainIPPool(ctx context.Context) (instanceMutated bool, err error) {
 	a, err := n.determineMaintenanceAction()
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	// Maintenance request has already been fulfilled
 	if a == nil {
-		return nil
+		return false, nil
 	}
 
 	if n.ipReleaseStatus == nil {
@@ -688,19 +689,19 @@ func (n *Node) maintainIPPool(ctx context.Context) error {
 				delete(n.ipsMarkedForRelease, ip)
 				delete(n.ipReleaseStatus, ip)
 			}
-			return nil
+			return true, nil
 		}
 		n.manager.metricsAPI.IncAllocationAttempt("ip unassignment failed", string(a.release.PoolID))
 		scopedLog.WithFields(logrus.Fields{
 			"selectedInterface":  a.release.InterfaceID,
 			"releasingAddresses": len(a.release.IPsToRelease),
 		}).WithError(err).Warning("Unable to unassign IPs from interface")
-		return err
+		return false, err
 	}
 
 	if a.allocation == nil {
 		scopedLog.Debug("No allocation action required")
-		return nil
+		return false, nil
 	}
 
 	// Assign needed addresses
@@ -711,7 +712,7 @@ func (n *Node) maintainIPPool(ctx context.Context) error {
 		if err == nil {
 			n.manager.metricsAPI.IncAllocationAttempt("success", string(a.allocation.PoolID))
 			n.manager.metricsAPI.AddIPAllocation(string(a.allocation.PoolID), int64(a.allocation.AvailableForAllocation))
-			return nil
+			return true, nil
 		}
 
 		n.manager.metricsAPI.IncAllocationAttempt("ip assignment failed", string(a.allocation.PoolID))
@@ -721,7 +722,8 @@ func (n *Node) maintainIPPool(ctx context.Context) error {
 		}).WithError(err).Warning("Unable to assign additional IPs to interface, will create new interface")
 	}
 
-	return n.createInterface(ctx, a.allocation)
+	err = n.createInterface(ctx, a.allocation)
+	return err != nil, err
 }
 
 func (n *Node) isInstanceRunning() (isRunning bool) {
@@ -765,14 +767,16 @@ func (n *Node) MaintainIPPool(ctx context.Context) error {
 		return nil
 	}
 
-	err := n.maintainIPPool(ctx)
+	instanceMutated, err := n.maintainIPPool(ctx)
 	if err == nil {
 		n.logger().Debug("Setting resync needed")
 		n.requireResync()
 	}
 	n.poolMaintenanceComplete()
 	n.recalculate()
-	n.manager.resyncTrigger.Trigger()
+	if instanceMutated || err != nil {
+		n.manager.resyncTrigger.Trigger()
+	}
 	return err
 }
 
@@ -813,9 +817,9 @@ func (n *Node) syncToAPIServer() (err error) {
 
 		// update excess IP release data
 		releaseStatus := make(map[string]uint8)
-		for ip, status := range n.ipReleaseStatus{
+		for ip, status := range n.ipReleaseStatus {
 			// retain the status for IPs agent already responded to
-			if existingStatus, ok := node.Status.IPAM.ReleaseIps[ip]; ok{
+			if existingStatus, ok := node.Status.IPAM.ReleaseIps[ip]; ok {
 				releaseStatus[ip] = existingStatus
 				continue
 			}
