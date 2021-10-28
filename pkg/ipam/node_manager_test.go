@@ -450,13 +450,20 @@ func (e *IPAMSuite) TestNodeManagerReleaseAddress(c *check.C) {
 
 	// Trigger resync manually, excess IPs should be released down to 18
 	// (10 used + 4 prealloc + 4 max-above-watermark)
-	node = mngr.Get("node3")
-	syncTime := mngr.instancesAPI.Resync(context.TODO())
-	mngr.resyncNode(context.TODO(), node, &resyncStats{}, syncTime)
+	// Excess timestamps should be registered
+	mngr.resyncTrigger.Trigger()
 
 	// Acknowledge release IPs after 3 secs
 	time.AfterFunc(3*time.Second, func() {
+		// Excess delay duration should have elapsed by now, trigger resync again.
+		// IPs should be marked as excess
+		mngr.resyncTrigger.Trigger()
+		time.Sleep(1*time.Second)
+		node.populateIPReleaseStatus(node.resource)
+		// Fake acknowledge IPs for release like agent would.
 		FakeAcknowledgeReleaseIps(node.resource)
+		// Resync one more time to process acknowledgements.
+		mngr.resyncTrigger.Trigger()
 	})
 
 	c.Assert(testutils.WaitUntil(func() bool { return reachedAddressesNeeded(mngr, "node3", 0) }, 5*time.Second), check.IsNil)

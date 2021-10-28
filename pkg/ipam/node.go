@@ -780,6 +780,20 @@ func (n *Node) MaintainIPPool(ctx context.Context) error {
 	return err
 }
 
+// Update cilium node IPAM status with excess IP release data
+func (n *Node) populateIPReleaseStatus(node *v2.CiliumNode) {
+	releaseStatus := make(map[string]uint8)
+	for ip, status := range n.ipReleaseStatus {
+		// retain the status for IPs agent already responded to
+		if existingStatus, ok := node.Status.IPAM.ReleaseIps[ip]; ok {
+			releaseStatus[ip] = existingStatus
+			continue
+		}
+		releaseStatus[ip] = status
+	}
+	node.Status.IPAM.ReleaseIps = releaseStatus
+}
+
 // syncToAPIServer synchronizes the contents of the CiliumNode resource
 // [(*Node).resource)] with the K8s apiserver. This operation occurs on an
 // interval to refresh the CiliumNode resource.
@@ -814,18 +828,7 @@ func (n *Node) syncToAPIServer() (err error) {
 		}
 
 		n.ops.PopulateStatusFields(node)
-
-		// update excess IP release data
-		releaseStatus := make(map[string]uint8)
-		for ip, status := range n.ipReleaseStatus {
-			// retain the status for IPs agent already responded to
-			if existingStatus, ok := node.Status.IPAM.ReleaseIps[ip]; ok {
-				releaseStatus[ip] = existingStatus
-				continue
-			}
-			releaseStatus[ip] = status
-		}
-		node.Status.IPAM.ReleaseIps = releaseStatus
+		n.populateIPReleaseStatus(node)
 
 		origNode, node, err = n.update(origNode, node, retry, true)
 		if err == nil {
