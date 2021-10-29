@@ -268,7 +268,7 @@ func (n *NodeManager) Update(resource *v2.CiliumNode) (nodeSynced bool) {
 			name:                resource.Name,
 			manager:             n,
 			ipsMarkedForRelease: make(map[string]time.Time),
-			ipReleaseStatus:     make(map[string]uint8),
+			ipReleaseStatus:     make(map[string]string),
 		}
 
 		node.ops = n.instancesAPI.CreateNode(resource, node)

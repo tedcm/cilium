@@ -239,7 +239,7 @@ func newCiliumNode(node string, preAllocate, minAllocate, used int) *v2.CiliumNo
 		Status: v2.NodeStatus{
 			IPAM: ipamTypes.IPAMStatus{
 				Used:       ipamTypes.AllocationMap{},
-				ReleaseIps: map[string]uint8{},
+				ReleaseIps: map[string]string{},
 			},
 		},
 	}

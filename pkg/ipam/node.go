@@ -113,7 +113,7 @@ type Node struct {
 	// 0 - IPAMMarkForRelease : Marked for Release
 	// 1 - IPAMReadyForRelease : Acknowledged as safe to release by agent
 	// 2 - IPAMDoNotRelease : Release request denied by agent
-	ipReleaseStatus map[string]uint8
+	ipReleaseStatus map[string]string
 }
 
 // Statistics represent the IP allocation statistics of a node
@@ -597,7 +597,7 @@ func (n *Node) maintainIPPool(ctx context.Context) (instanceMutated bool, err er
 	}
 
 	if n.ipReleaseStatus == nil {
-		n.ipReleaseStatus = make(map[string]uint8)
+		n.ipReleaseStatus = make(map[string]string)
 	}
 
 	// Update timestamps for IPs from this iteration
@@ -782,12 +782,14 @@ func (n *Node) MaintainIPPool(ctx context.Context) error {
 
 // Update cilium node IPAM status with excess IP release data
 func (n *Node) populateIPReleaseStatus(node *v2.CiliumNode) {
-	releaseStatus := make(map[string]uint8)
+	releaseStatus := make(map[string]string)
 	for ip, status := range n.ipReleaseStatus {
-		// retain the status for IPs agent already responded to
 		if existingStatus, ok := node.Status.IPAM.ReleaseIps[ip]; ok {
-			releaseStatus[ip] = existingStatus
-			continue
+			// retain status if agent already responded to this IP
+			if existingStatus == ipamOption.IPAMReadyForRelease || existingStatus == ipamOption.IPAMDoNotRelease {
+				releaseStatus[ip] = existingStatus
+				continue
+			}
 		}
 		releaseStatus[ip] = status
 	}

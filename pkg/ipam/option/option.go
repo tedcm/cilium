@@ -40,7 +40,7 @@ const (
 )
 
 const (
-	IPAMMarkForRelease = iota
-	IPAMReadyForRelease
-	IPAMDoNotRelease
+	IPAMMarkForRelease  = "marked-for-release"
+	IPAMReadyForRelease = "ready-for-release"
+	IPAMDoNotRelease    = "do-not-release"
 )

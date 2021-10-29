@@ -66,16 +66,18 @@ func (s *IPAMSuite) TestMarkForReleaseNoAllocate(c *C) {
 		c.Assert(err, IsNil)
 	}
 
-	// Verify that the agent marks IP as ready for release and that the IP cannot be allocated meanwhile.
+	// Update 1.1.1.4 as marked for release like operator would.
 	cn.Status.IPAM.ReleaseIps["1.1.1.4"] = ipamOption.IPAMMarkForRelease
+	// Attempts to allocate 1.1.1.4 should fail, since it's already marked for release
 	epipv4, _ := addressing.NewCiliumIPv4("1.1.1.4")
 	_, err := ipam.IPv4Allocator.Allocate(epipv4.IP(), "test")
 	c.Assert(err, NotNil)
+	// Call agent's CRD update function. status for 1.1.1.4 should change from marked for release to ready for release
 	sharedNodeStore.updateLocalNodeResource(cn)
-	c.Assert(int(cn.Status.IPAM.ReleaseIps["1.1.1.4"]), checker.Equals, ipamOption.IPAMReadyForRelease)
+	c.Assert(cn.Status.IPAM.ReleaseIps["1.1.1.4"], checker.Equals, ipamOption.IPAMReadyForRelease)
 
 	// Verify that 1.1.1.3 is denied for release, since it's already in use
 	cn.Status.IPAM.ReleaseIps["1.1.1.3"] = ipamOption.IPAMMarkForRelease
 	sharedNodeStore.updateLocalNodeResource(cn)
-	c.Assert(int(cn.Status.IPAM.ReleaseIps["1.1.1.3"]), checker.Equals, ipamOption.IPAMDoNotRelease)
+	c.Assert(cn.Status.IPAM.ReleaseIps["1.1.1.3"], checker.Equals, ipamOption.IPAMDoNotRelease)
 }
