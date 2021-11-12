@@ -126,14 +126,14 @@ type IPAMStatus struct {
 	// +optional
 	OperatorStatus OperatorStatus `json:"operator-status,omitempty"`
 
-	// ReleaseIps tracks the state for every IP considered for release.
+	// ReleaseIPs tracks the state for every IP considered for release.
 	// value can be one of the following string :
 	// * marked-for-release : Set by operator as possible candidate for IP
 	// * ready-for-release  : Acknowledged as safe to release by agent
 	// * do-not-release     : IP already in use / not owned by the node. Set by agent
 	//
 	// +optional
-	ReleaseIps map[string]string `json:"release-ips,omitempty"`
+	ReleaseIPs map[string]string `json:"release-ips,omitempty"`
 }
 
 // OperatorStatus is the status used by cilium-operator to report

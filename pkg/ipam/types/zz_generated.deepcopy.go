@@ -95,8 +95,8 @@ func (in *IPAMStatus) DeepCopyInto(out *IPAMStatus) {
 		}
 	}
 	out.OperatorStatus = in.OperatorStatus
-	if in.ReleaseIps != nil {
-		in, out := &in.ReleaseIps, &out.ReleaseIps
+	if in.ReleaseIPs != nil {
+		in, out := &in.ReleaseIPs, &out.ReleaseIPs
 		*out = make(map[string]string, len(*in))
 		for key, val := range *in {
 			(*out)[key] = val

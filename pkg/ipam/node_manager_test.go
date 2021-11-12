@@ -239,7 +239,7 @@ func newCiliumNode(node string, preAllocate, minAllocate, used int) *v2.CiliumNo
 		Status: v2.NodeStatus{
 			IPAM: ipamTypes.IPAMStatus{
 				Used:       ipamTypes.AllocationMap{},
-				ReleaseIps: map[string]string{},
+				ReleaseIPs: map[string]string{},
 			},
 		},
 	}
@@ -392,9 +392,9 @@ func (e *IPAMSuite) TestNodeManagerMinAllocateAndPreallocate(c *check.C) {
 }
 
 func FakeAcknowledgeReleaseIps(cn *v2.CiliumNode) {
-	for ip, status := range cn.Status.IPAM.ReleaseIps {
+	for ip, status := range cn.Status.IPAM.ReleaseIPs {
 		if status == ipamOption.IPAMMarkForRelease {
-			cn.Status.IPAM.ReleaseIps[ip] = ipamOption.IPAMReadyForRelease
+			cn.Status.IPAM.ReleaseIPs[ip] = ipamOption.IPAMReadyForRelease
 		}
 	}
 }

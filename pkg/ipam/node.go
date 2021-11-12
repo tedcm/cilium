@@ -637,9 +637,7 @@ func (n *Node) maintainIPPool(ctx context.Context) (instanceMutated bool, err er
 			// from local map and cilium node status if n.ipReleaseStatus is already updated.
 			// from n.ipReleaseStatus
 			delete(n.ipsMarkedForRelease, markedIP)
-			if _, ok := n.ipReleaseStatus[markedIP]; ok {
-				delete(n.ipReleaseStatus, markedIP)
-			}
+			delete(n.ipReleaseStatus, markedIP)
 			continue
 		}
 		// Check if the IP release waiting period elapsed
@@ -647,13 +645,13 @@ func (n *Node) maintainIPPool(ctx context.Context) (instanceMutated bool, err er
 			continue
 		}
 		// Handle IPs we've already heard back from agent.
-		if n.resource.Status.IPAM.ReleaseIps != nil {
-			if status, ok := n.resource.Status.IPAM.ReleaseIps[markedIP]; ok {
+		if n.resource.Status.IPAM.ReleaseIPs != nil {
+			if status, ok := n.resource.Status.IPAM.ReleaseIPs[markedIP]; ok {
 				switch status {
 				case ipamOption.IPAMReadyForRelease:
 					ipsToRelease = append(ipsToRelease, markedIP)
 				case ipamOption.IPAMDoNotRelease:
-					scopedLog.WithFields(logrus.Fields{"ip": markedIP}).Debug("IP release request denied from agent")
+					scopedLog.WithFields(logrus.Fields{logfields.IPAddr: markedIP}).Debug("IP release request denied from agent")
 					delete(n.ipsMarkedForRelease, markedIP)
 					delete(n.ipReleaseStatus, markedIP)
 				}
@@ -664,7 +662,7 @@ func (n *Node) maintainIPPool(ctx context.Context) (instanceMutated bool, err er
 	}
 	// Update cilium node CRD with IPs that need to be marked for release
 	for _, ip := range ipsToMark {
-		scopedLog.WithFields(logrus.Fields{"ip": ip}).Debug("Marking IP for release")
+		scopedLog.WithFields(logrus.Fields{logfields.IPAddr: ip}).Debug("Marking IP for release")
 		n.ipReleaseStatus[ip] = ipamOption.IPAMMarkForRelease
 	}
 
@@ -784,7 +782,7 @@ func (n *Node) MaintainIPPool(ctx context.Context) error {
 func (n *Node) populateIPReleaseStatus(node *v2.CiliumNode) {
 	releaseStatus := make(map[string]string)
 	for ip, status := range n.ipReleaseStatus {
-		if existingStatus, ok := node.Status.IPAM.ReleaseIps[ip]; ok {
+		if existingStatus, ok := node.Status.IPAM.ReleaseIPs[ip]; ok {
 			// retain status if agent already responded to this IP
 			if existingStatus == ipamOption.IPAMReadyForRelease || existingStatus == ipamOption.IPAMDoNotRelease {
 				releaseStatus[ip] = existingStatus
@@ -793,7 +791,7 @@ func (n *Node) populateIPReleaseStatus(node *v2.CiliumNode) {
 		}
 		releaseStatus[ip] = status
 	}
-	node.Status.IPAM.ReleaseIps = releaseStatus
+	node.Status.IPAM.ReleaseIPs = releaseStatus
 }
 
 // syncToAPIServer synchronizes the contents of the CiliumNode resource

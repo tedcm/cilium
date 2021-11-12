@@ -313,13 +313,13 @@ func (n *nodeStore) updateLocalNodeResource(node *ciliumv2.CiliumNode) {
 
 	releaseUpstreamSyncNeeded := false
 	// ACK or NACK IPs marked for release by the operator
-	for ip, status := range n.ownNode.Status.IPAM.ReleaseIps {
+	for ip, status := range n.ownNode.Status.IPAM.ReleaseIPs {
 		if status != ipamOption.IPAMMarkForRelease || n.ownNode.Spec.IPAM.Pool == nil {
 			continue
 		}
 		// NACK the IP, if this node doesn't own the IP
 		if _, ok := n.ownNode.Spec.IPAM.Pool[ip]; !ok {
-			n.ownNode.Status.IPAM.ReleaseIps[ip] = ipamOption.IPAMDoNotRelease
+			n.ownNode.Status.IPAM.ReleaseIPs[ip] = ipamOption.IPAMDoNotRelease
 			continue
 		}
 		// Retrieve the appropriate allocator
@@ -347,16 +347,16 @@ func (n *nodeStore) updateLocalNodeResource(node *ciliumv2.CiliumNode) {
 		allocator.mutex.Lock()
 		if _, ok := allocator.allocated[ip]; ok {
 			// IP still in use, update the operator to stop releasing the IP.
-			n.ownNode.Status.IPAM.ReleaseIps[ip] = ipamOption.IPAMDoNotRelease
+			n.ownNode.Status.IPAM.ReleaseIPs[ip] = ipamOption.IPAMDoNotRelease
 		} else {
-			n.ownNode.Status.IPAM.ReleaseIps[ip] = ipamOption.IPAMReadyForRelease
+			n.ownNode.Status.IPAM.ReleaseIPs[ip] = ipamOption.IPAMReadyForRelease
 		}
 		allocator.mutex.Unlock()
 		releaseUpstreamSyncNeeded = true
 	}
 
 	if releaseUpstreamSyncNeeded {
-		n.refreshTrigger.TriggerWithReason(fmt.Sprintf("excess IP release"))
+		n.refreshTrigger.TriggerWithReason("excess IP release")
 	}
 }
 
@@ -430,7 +430,7 @@ func (n *nodeStore) allocate(ip net.IP) (*ipamTypes.AllocationIP, error) {
 		return nil, fmt.Errorf("No IPs available")
 	}
 
-	if status, ok := n.ownNode.Status.IPAM.ReleaseIps[ip.String()]; ok {
+	if status, ok := n.ownNode.Status.IPAM.ReleaseIPs[ip.String()]; ok {
 		if status == ipamOption.IPAMMarkForRelease || status == ipamOption.IPAMReadyForRelease {
 			return nil, fmt.Errorf("IP not available, marked or ready for release")
 		}

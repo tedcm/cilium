@@ -124,8 +124,8 @@ func (in *IPAMStatus) DeepEqual(other *IPAMStatus) bool {
 		return false
 	}
 
-	if ((in.ReleaseIps != nil) && (other.ReleaseIps != nil)) || ((in.ReleaseIps == nil) != (other.ReleaseIps == nil)) {
-		in, other := &in.ReleaseIps, &other.ReleaseIps
+	if ((in.ReleaseIPs != nil) && (other.ReleaseIPs != nil)) || ((in.ReleaseIPs == nil) != (other.ReleaseIPs == nil)) {
+		in, other := &in.ReleaseIPs, &other.ReleaseIPs
 		if other == nil {
 			return false
 		}
