@@ -42,6 +42,7 @@ cilium-operator [flags]
       --enable-metrics                            Enable Prometheus metrics
       --enable-wireguard                          Enable wireguard
       --eni-tags map                              ENI tags in the form of k1=v1 (multiple k/v pairs can be passed by repeating the CLI flag)
+      --excess-ip-release-delay int               Number of seconds operator would wait before it releases an IP previously marked as excess (default 180)
       --gops-port int                             Port for gops server to listen on (default 9891)
   -h, --help                                      help for cilium-operator
       --identity-allocation-mode string           Method to use for identity allocation (default "kvstore")
