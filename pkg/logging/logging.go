@@ -91,7 +91,7 @@ func init() {
 
 	// Make sure that klog logging variables are initialized so that we can
 	// update them from this file.
-	klog.InitFlags(nil)
+	//klog.InitFlags(nil)
 
 	// Make sure klog does not log to stderr as we want it to control the output
 	// of klog so we want klog to log the errors to each writer of each level.
