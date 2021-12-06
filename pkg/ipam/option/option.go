@@ -38,3 +38,9 @@ const (
 	// option.IPAM
 	IPAMClusterPool = "cluster-pool"
 )
+
+const (
+	IPAMMarkForRelease  = "marked-for-release"
+	IPAMReadyForRelease = "ready-for-release"
+	IPAMDoNotRelease    = "do-not-release"
+)
