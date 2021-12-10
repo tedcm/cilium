@@ -590,9 +590,15 @@ func (n *Node) removeStaleReleaseIPs() {
 			continue
 		}
 		if _, ok := n.resource.Status.IPAM.ReleaseIPs[ip]; !ok {
-			delete(n.ipReleaseStatus, ip)
+			n.deleteLocalReleaseStatus(ip)
 		}
 	}
+}
+
+func (n *Node) deleteLocalReleaseStatus(ip string) {
+	n.mutex.Lock()
+	defer n.mutex.Unlock()
+	delete(n.ipReleaseStatus, ip)
 }
 
 // maintainIPPool attempts to allocate or release all required IPs to fulfill the needed gap.
@@ -652,7 +658,7 @@ func (n *Node) maintainIPPool(ctx context.Context) (instanceMutated bool, err er
 			// can be freed up. If the selected interface changes or if this IP is not excess anymore, remove entry
 			// from local maps.
 			delete(n.ipsMarkedForRelease, markedIP)
-			delete(n.ipReleaseStatus, markedIP)
+			n.deleteLocalReleaseStatus(markedIP)
 			continue
 		}
 		// Check if the IP release waiting period elapsed
@@ -668,7 +674,7 @@ func (n *Node) maintainIPPool(ctx context.Context) (instanceMutated bool, err er
 				case ipamOption.IPAMDoNotRelease:
 					scopedLog.WithFields(logrus.Fields{logfields.IPAddr: markedIP}).Debug("IP release request denied from agent")
 					delete(n.ipsMarkedForRelease, markedIP)
-					delete(n.ipReleaseStatus, markedIP)
+					n.deleteLocalReleaseStatus(markedIP)
 				}
 				continue
 			}
@@ -676,10 +682,12 @@ func (n *Node) maintainIPPool(ctx context.Context) (instanceMutated bool, err er
 		ipsToMark = append(ipsToMark, markedIP)
 	}
 	// Update cilium node CRD with IPs that need to be marked for release
+	n.mutex.Lock()
 	for _, ip := range ipsToMark {
 		scopedLog.WithFields(logrus.Fields{logfields.IPAddr: ip}).Debug("Marking IP for release")
 		n.ipReleaseStatus[ip] = ipamOption.IPAMMarkForRelease
 	}
+	n.mutex.Unlock()
 
 	if len(ipsToRelease) > 0 {
 		a.release.IPsToRelease = ipsToRelease
@@ -698,10 +706,12 @@ func (n *Node) maintainIPPool(ctx context.Context) (instanceMutated bool, err er
 			n.manager.metricsAPI.AddIPRelease(string(a.release.PoolID), int64(len(a.release.IPsToRelease)))
 
 			// Remove the IPs from ipsMarkedForRelease
+			n.mutex.Lock()
 			for _, ip := range ipsToRelease {
 				delete(n.ipsMarkedForRelease, ip)
 				n.ipReleaseStatus[ip] = ipamOption.IPAMReleased
 			}
+			n.mutex.Unlock()
 			return true, nil
 		}
 		n.manager.metricsAPI.IncAllocationAttempt("ip unassignment failed", string(a.release.PoolID))
@@ -795,6 +805,8 @@ func (n *Node) MaintainIPPool(ctx context.Context) error {
 
 // Update cilium node IPAM status with excess IP release data
 func (n *Node) PopulateIPReleaseStatus(node *v2.CiliumNode) {
+	n.mutex.Lock()
+	defer n.mutex.Unlock()
 	releaseStatus := make(map[string]ipamTypes.IPReleaseStatus)
 	for ip, status := range n.ipReleaseStatus {
 		if existingStatus, ok := node.Status.IPAM.ReleaseIPs[ip]; ok {
