@@ -811,7 +811,7 @@ func (n *Node) PopulateIPReleaseStatus(node *v2.CiliumNode) {
 	defer n.mutex.Unlock()
 	releaseStatus := make(map[string]ipamTypes.IPReleaseStatus)
 	for ip, status := range n.ipReleaseStatus {
-		if existingStatus, ok := node.Status.IPAM.ReleaseIPs[ip]; ok {
+		if existingStatus, ok := node.Status.IPAM.ReleaseIPs[ip]; ok && status == ipamOption.IPAMMarkForRelease {
 			// retain status if agent already responded to this IP
 			if existingStatus == ipamOption.IPAMReadyForRelease || existingStatus == ipamOption.IPAMDoNotRelease {
 				releaseStatus[ip] = existingStatus
