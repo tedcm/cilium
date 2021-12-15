@@ -331,35 +331,38 @@ func (n *nodeStore) updateLocalNodeResource(node *ciliumv2.CiliumNode) {
 				// NACK the IP, if this node doesn't own the IP
 				n.ownNode.Status.IPAM.ReleaseIPs[ip] = ipamOption.IPAMDoNotRelease
 			}
-			continue
-		}
-		// Retrieve the appropriate allocator
-		var allocator *crdAllocator
-		var ipFamily Family
-		if ipAddr := net.ParseIP(ip); ipAddr != nil {
-			ipFamily = DeriveFamily(ipAddr)
-		}
-		if ipFamily == "" {
-			continue
-		}
-		for _, a := range n.allocators {
-			if a.family == ipFamily {
-				allocator = a
-			}
-		}
-		if allocator == nil {
+			releaseUpstreamSyncNeeded = true
 			continue
 		}
 
-		allocator.mutex.Lock()
-		if _, ok := allocator.allocated[ip]; ok {
-			// IP still in use, update the operator to stop releasing the IP.
-			n.ownNode.Status.IPAM.ReleaseIPs[ip] = ipamOption.IPAMDoNotRelease
-		} else {
-			n.ownNode.Status.IPAM.ReleaseIPs[ip] = ipamOption.IPAMReadyForRelease
+		if status == ipamOption.IPAMMarkForRelease {
+			// Retrieve the appropriate allocator
+			var allocator *crdAllocator
+			var ipFamily Family
+			if ipAddr := net.ParseIP(ip); ipAddr != nil {
+				ipFamily = DeriveFamily(ipAddr)
+			}
+			if ipFamily == "" {
+				continue
+			}
+			for _, a := range n.allocators {
+				if a.family == ipFamily {
+					allocator = a
+				}
+			}
+			if allocator == nil {
+				continue
+			}
+			allocator.mutex.Lock()
+			if _, ok := allocator.allocated[ip]; ok {
+				// IP still in use, update the operator to stop releasing the IP.
+				n.ownNode.Status.IPAM.ReleaseIPs[ip] = ipamOption.IPAMDoNotRelease
+			} else {
+				n.ownNode.Status.IPAM.ReleaseIPs[ip] = ipamOption.IPAMReadyForRelease
+			}
+			allocator.mutex.Unlock()
+			releaseUpstreamSyncNeeded = true
 		}
-		allocator.mutex.Unlock()
-		releaseUpstreamSyncNeeded = true
 	}
 
 	if releaseUpstreamSyncNeeded {

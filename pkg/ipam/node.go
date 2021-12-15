@@ -607,6 +607,10 @@ func (n *Node) deleteLocalReleaseStatus(ip string) {
 // returns instanceMutated which tracks if state changed with the cloud provider and is used
 // to determine if IPAM pool maintainer trigger func needs to be invoked.
 func (n *Node) maintainIPPool(ctx context.Context) (instanceMutated bool, err error) {
+	if n.manager.releaseExcessIPs {
+		n.removeStaleReleaseIPs()
+	}
+
 	a, err := n.determineMaintenanceAction()
 	if err != nil {
 		return false, err
@@ -643,8 +647,6 @@ func (n *Node) maintainIPPool(ctx context.Context) (instanceMutated bool, err er
 		// Resetting ipsMarkedForRelease if there are no IPs to release in this iteration
 		n.ipsMarkedForRelease = make(map[string]time.Time)
 	}
-
-	n.removeStaleReleaseIPs()
 
 	for markedIP, ts := range n.ipsMarkedForRelease {
 		// Determine which IPs are still marked for release.
@@ -807,6 +809,9 @@ func (n *Node) MaintainIPPool(ctx context.Context) error {
 
 // Update cilium node IPAM status with excess IP release data
 func (n *Node) PopulateIPReleaseStatus(node *v2.CiliumNode) {
+	// maintainIPPool() might not have run yet since the last update from agent.
+	// Attempt to remove any stale entries
+	n.removeStaleReleaseIPs()
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 	releaseStatus := make(map[string]ipamTypes.IPReleaseStatus)
