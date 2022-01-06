@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	operatorOption "github.com/cilium/cilium/operator/option"
 	"time"
 
 	ec2mock "github.com/cilium/cilium/pkg/aws/ec2/mock"
@@ -421,6 +422,8 @@ func (e *ENISuite) TestNodeManagerMinAllocateAndPreallocate(c *check.C) {
 
 	// Use 10 out of 10 IPs, PreAllocate 1 must kick in and allocate an additional IP
 	mngr.Update(updateCiliumNode(cn, 10, 10))
+	syncTime := instances.Resync(context.TODO())
+	mngr.Resync(context.TODO(), syncTime)
 	c.Assert(testutils.WaitUntil(func() bool { return reachedAddressesNeeded(mngr, "node2", 0) }, 5*time.Second), check.IsNil)
 	node = mngr.Get("node2")
 	c.Assert(node, check.Not(check.IsNil))
@@ -446,6 +449,7 @@ func (e *ENISuite) TestNodeManagerMinAllocateAndPreallocate(c *check.C) {
 // - MaxAboveWatermark 4
 // - FirstInterfaceIndex 1
 func (e *ENISuite) TestNodeManagerReleaseAddress(c *check.C) {
+	operatorOption.Config.ExcessIPReleaseDelay = 2
 	ec2api := ec2mock.NewAPI([]*ipamTypes.Subnet{testSubnet}, []*ipamTypes.VirtualNetwork{testVpc}, testSecurityGroups)
 	instances := NewInstancesManager(ec2api, nil)
 	c.Assert(instances, check.Not(check.IsNil))
@@ -507,8 +511,27 @@ func (e *ENISuite) TestNodeManagerReleaseAddress(c *check.C) {
 	obj.Status.ENI.ENIs = eniNode.enis
 	eniNode.mutex.RUnlock()
 	node.UpdatedResource(obj)
+
+	// Excess timestamps should be registered after this
 	syncTime := instances.Resync(context.TODO())
 	mngr.Resync(context.TODO(), syncTime)
+
+	// Acknowledge release IPs after 3 secs
+	time.AfterFunc(3*time.Second, func() {
+		// Excess delay duration should have elapsed by now, trigger resync again.
+		// IPs should be marked as excess
+		syncTime := instances.Resync(context.TODO())
+		mngr.Resync(context.TODO(), syncTime)
+		time.Sleep(1 * time.Second)
+		node.PopulateIPReleaseStatus(obj)
+		// Fake acknowledge IPs for release like agent would.
+		testutils.FakeAcknowledgeReleaseIps(obj)
+		node.UpdatedResource(obj)
+		// Resync one more time to process acknowledgements.
+		syncTime = instances.Resync(context.TODO())
+		mngr.Resync(context.TODO(), syncTime)
+	})
+
 	c.Assert(testutils.WaitUntil(func() bool { return reachedAddressesNeeded(mngr, "node3", 0) }, 5*time.Second), check.IsNil)
 	node = mngr.Get("node3")
 	c.Assert(node, check.Not(check.IsNil))
@@ -549,6 +572,8 @@ func (e *ENISuite) TestNodeManagerExceedENICapacity(c *check.C) {
 	// Use 40 out of 42 available IPs, we should reach 0 address needed once
 	// we assigned the remaining 3 that the m4.xlarge instance type supports (45 max)
 	mngr.Update(updateCiliumNode(cn, 42, 40))
+	syncTime := instances.Resync(context.TODO())
+	mngr.Resync(context.TODO(), syncTime)
 	c.Assert(testutils.WaitUntil(func() bool { return reachedAddressesNeeded(mngr, "node2", 0) }, 5*time.Second), check.IsNil)
 
 	node = mngr.Get("node2")

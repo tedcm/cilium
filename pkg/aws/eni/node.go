@@ -18,6 +18,7 @@ package eni
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -118,9 +119,17 @@ func (n *Node) PrepareIPRelease(excessIPs int, scopedLog *logrus.Entry) *ipam.Re
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 
+	// Needed for selecting the same ENI to release IPs from
+	// when more than one ENI qualifies for release
+	eniIds := make([]string, 0, len(n.enis))
+	for k := range n.enis {
+		eniIds = append(eniIds, k)
+	}
+	sort.Strings(eniIds)
 	// Iterate over ENIs on this node, select the ENI with the most
 	// addresses available for release
-	for key, e := range n.enis {
+	for _, eniId := range eniIds {
+		e := n.enis[eniId]
 		scopedLog.WithFields(logrus.Fields{
 			fieldEniID:     e.ID,
 			"needIndex":    *n.k8sObj.Spec.ENI.FirstInterfaceIndex,
@@ -159,7 +168,7 @@ func (n *Node) PrepareIPRelease(excessIPs int, scopedLog *logrus.Entry) *ipam.Re
 		eniWithMoreFreeIPsFound := maxReleaseOnENI > len(r.IPsToRelease)
 		// Select the ENI with the most addresses available for release
 		if firstENIWithFreeIPFound || eniWithMoreFreeIPsFound {
-			r.InterfaceID = key
+			r.InterfaceID = eniId
 			r.PoolID = ipamTypes.PoolID(e.Subnet.ID)
 			r.IPsToRelease = freeIpsOnENI[:maxReleaseOnENI]
 		}
