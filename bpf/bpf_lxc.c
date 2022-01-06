@@ -812,6 +812,7 @@ int handle_xgress(struct __ctx_buff *ctx)
 	int ret;
 
 	bpf_clear_meta(ctx);
+	ctx->queue_mapping = 0;
 
 	send_trace_notify(ctx, TRACE_FROM_LXC, SECLABEL, 0, 0, 0, 0,
 			  TRACE_PAYLOAD_LEN);
