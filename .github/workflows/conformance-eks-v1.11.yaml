@@ -117,8 +117,19 @@ jobs:
       github.event_name == 'schedule' ||
       github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
+      - name: Checkout code
+        uses: actions/checkout@ec3a7ce113134d7a93b817d10a8272cb61118579
+        with:
+          persist-credentials: false
+      - name: Install Go
+        uses: actions/setup-go@424fc82d43fa5a37540bae62709ddcc23d9520d4
+        with:
+          go-version: 1.17.6
+      - name: Install ginkgo
+        run: |
+          go install github.com/onsi/ginkgo/ginkgo@v1.16.5
       - name: Set up job variables
         id: vars
         run: |
