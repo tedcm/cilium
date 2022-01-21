@@ -36,6 +36,7 @@ import (
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/metrics"
 	"github.com/cilium/cilium/pkg/option"
+	"github.com/cilium/cilium/pkg/pprof"
 	"github.com/cilium/cilium/pkg/rand"
 	"github.com/cilium/cilium/pkg/rate"
 	"github.com/cilium/cilium/pkg/version"
@@ -177,12 +178,17 @@ func runOperator() {
 		operatorMetrics.Register()
 	}
 
+	if operatorOption.Config.PProf {
+		pprof.Enable()
+	}
+
 	k8s.Configure(
 		option.Config.K8sAPIServer,
 		option.Config.K8sKubeConfigPath,
 		float32(option.Config.K8sClientQPSLimit),
 		option.Config.K8sClientBurst,
 	)
+
 	if err := k8s.Init(option.Config); err != nil {
 		log.WithError(err).Fatal("Unable to connect to Kubernetes apiserver")
 	}
