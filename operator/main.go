@@ -179,7 +179,7 @@ func runOperator() {
 	}
 
 	if operatorOption.Config.PProf {
-		pprof.Enable()
+		pprof.Enable(operatorOption.Config.PProfPort)
 	}
 
 	k8s.Configure(
