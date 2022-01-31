@@ -90,6 +90,7 @@ cilium-agent [flags]
       --enable-session-affinity                       Enable support for service session affinity
       --enable-svc-source-range-check                 Enable check of service source ranges (currently, only for LoadBalancer) (default true)
       --enable-tracing                                Enable tracing while determining policy (debugging)
+      --enable-unreachable-routes                    Add unreachable routes on pod deletion (default false)
       --enable-well-known-identities                  Enable well-known identities for known Kubernetes components (default true)
       --enable-xt-socket-fallback                     Enable fallback for missing xt_socket module (default true)
       --encrypt-interface string                      Transparent encryption interface
