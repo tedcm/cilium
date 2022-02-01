@@ -64,6 +64,10 @@ type Configuration interface {
 	// enabled
 	HealthCheckingEnabled() bool
 
+	// UnreachableRoutesEnabled returns true when unreachable-routes is
+	// enabled
+	UnreachableRoutesEnabled() bool
+
 	// BlacklistConflictingRoutesEnabled must return true when blacklisting
 	// of conflicting IPs is enabled
 	BlacklistConflictingRoutesEnabled() bool
