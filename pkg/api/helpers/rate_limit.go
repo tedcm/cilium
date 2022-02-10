@@ -43,10 +43,15 @@ func NewApiLimiter(metrics MetricsAPI, rateLimit float64, burst int) *ApiLimiter
 }
 
 // Limit applies the rate limiting configuration for the given operation
+// HACK: Updated to follow Traefik's implementation: https://github.com/traefik/traefik/blob/ca55dfe1c6f03ca7f109c5faf38f268c9d458195/pkg/middlewares/ratelimiter/rate_limiter.go#L156-L173
 func (l *ApiLimiter) Limit(ctx context.Context, operation string) {
 	r := l.limiter.Reserve()
-	if delay := r.Delay(); delay != time.Duration(0) && delay != rate.InfDuration {
-		l.metrics.ObserveRateLimit(operation, delay)
-		l.limiter.Wait(ctx)
+	if !r.OK() {
+		return
 	}
+	delay := r.Delay()
+	if delay != time.Duration(0) && delay != rate.InfDuration {
+		l.metrics.ObserveRateLimit(operation, delay)
+	}
+	time.Sleep(delay)
 }
