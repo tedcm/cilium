@@ -10,12 +10,15 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"k8s.io/client-go/tools/cache"
 
 	operatorOption "github.com/cilium/cilium/operator/option"
+	"github.com/cilium/cilium/operator/watchers"
 	"github.com/cilium/cilium/pkg/defaults"
 	ipamOption "github.com/cilium/cilium/pkg/ipam/option"
 	ipamTypes "github.com/cilium/cilium/pkg/ipam/types"
 	v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
+	v1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/math"
@@ -243,6 +246,27 @@ func (n *Node) GetNeededAddresses() int {
 		return stats.ExcessIPs * -1
 	}
 	return 0
+}
+
+func getPendingPodCnt(n *Node) int {
+	pendingPods := 0
+	scopedLog := n.logger()
+	if watchers.PodStore == nil {
+		scopedLog.Warnf("Pod store un-initialized")
+		return pendingPods
+	}
+	values, err := watchers.PodStore.(cache.Indexer).ByIndex(watchers.PodNodeNameIndex, n.name)
+	if err != nil {
+		scopedLog.WithError(err).Error("Unable to access pod to node name index")
+		return pendingPods
+	}
+	for _, pod := range values {
+		p := pod.(v1.Pod)
+		if p.Status.Phase == v1.PodPending {
+			pendingPods++
+		}
+	}
+	return pendingPods
 }
 
 func calculateNeededIPs(availableIPs, usedIPs, preAllocate, minAllocate, maxAllocate int) (neededIPs int) {
@@ -546,8 +570,13 @@ func (n *Node) determineMaintenanceAction() (*maintenanceAction, error) {
 		return nil, err
 	}
 
+	numPendingPods := getPendingPodCnt(n)
+	surgeAllocate := 0
+	if numPendingPods > stats.NeededIPs {
+		surgeAllocate = numPendingPods - stats.NeededIPs
+	}
 	n.mutex.RLock()
-	a.allocation.MaxIPsToAllocate = stats.NeededIPs + n.getMaxAboveWatermark()
+	a.allocation.MaxIPsToAllocate = stats.NeededIPs + n.getMaxAboveWatermark() + surgeAllocate
 	n.mutex.RUnlock()
 
 	if a.allocation != nil {

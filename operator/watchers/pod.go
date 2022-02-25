@@ -16,6 +16,8 @@ import (
 	slim_metav1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
 )
 
+const PodNodeNameIndex = "pod-node"
+
 var (
 	// PodStore has a minimal copy of all pods running in the cluster.
 	// Warning: The pods stored in the cache are not intended to be used for Update
@@ -36,15 +38,26 @@ var (
 	UnmanagedPodStoreSynced = make(chan struct{})
 )
 
+// podNodeNameIndexFunc indexes pods node name
+func podNodeNameIndexFunc(obj interface{}) ([]string, error) {
+	pod := obj.(*slim_corev1.Pod)
+	if pod.Spec.NodeName != "" {
+		return []string{pod.Spec.NodeName}, nil
+	}
+	return []string{}, nil
+}
+
 func PodsInit(k8sClient kubernetes.Interface, stopCh <-chan struct{}) {
 	var podInformer cache.Controller
-	PodStore, podInformer = informer.NewInformer(
+	PodStore = cache.NewIndexer(cache.DeletionHandlingMetaNamespaceKeyFunc, cache.Indexers{PodNodeNameIndex: podNodeNameIndexFunc})
+	podInformer = informer.NewInformerWithStore(
 		cache.NewListWatchFromClient(k8sClient.CoreV1().RESTClient(),
 			"pods", v1.NamespaceAll, fields.Everything()),
 		&slim_corev1.Pod{},
 		0,
 		cache.ResourceEventHandlerFuncs{},
 		convertToPod,
+		PodStore,
 	)
 	go podInformer.Run(stopCh)
 
