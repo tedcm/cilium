@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/cilium/cilium/pkg/api/helpers"
+	azuremetrics "github.com/cilium/cilium/pkg/azure/metrics"
 	"github.com/cilium/cilium/pkg/azure/types"
 	"github.com/cilium/cilium/pkg/cidr"
 	ipamTypes "github.com/cilium/cilium/pkg/ipam/types"
@@ -70,6 +71,7 @@ func NewClient(subscriptionID, resourceGroup string, metrics MetricsAPI, rateLim
 		metricsAPI:      metrics,
 		limiter:         helpers.NewApiLimiter(metrics, rateLimit, burst),
 	}
+	azureMetrics := azuremetrics.NewMetricsExtractor(log, "TODO", subscriptionID, "Microsoft.Compute")
 
 	// Authorizer based on file first and then environment variables
 	authorizer, err := auth.NewAuthorizerFromFile(compute.DefaultBaseURI)
@@ -88,6 +90,7 @@ func NewClient(subscriptionID, resourceGroup string, metrics MetricsAPI, rateLim
 	c.vmss.AddToUserAgent(userAgent)
 	c.vmscalesets.Authorizer = authorizer
 	c.vmscalesets.AddToUserAgent(userAgent)
+	c.vmscalesets.ResponseInspector = azureMetrics.GetRespondDecorator()
 
 	return c, nil
 }
