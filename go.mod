@@ -80,7 +80,6 @@ require (
 	golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	golang.org/x/sys v0.0.0-20210615035016-665e8c7367d1
-	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
 	golang.org/x/tools v0.0.0-20200324175852-6fb6f5a9fc59
 	google.golang.org/genproto v0.0.0-20190819201941-24fa4b261c55
