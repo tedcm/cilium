@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/Azure/go-autorest/autorest"
+	operatorMetrics "github.com/cilium/cilium/operator/metrics"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 )
@@ -249,7 +250,7 @@ func (m *MetricsExtractor) GetRespondDecorator() autorest.RespondDecorator {
 }
 
 func init() {
-	prometheus.MustRegister(
+	operatorMetrics.Registry.MustRegister(
 		metricAzureRateLimitRemaining,
 		metricAzureRateLimitRemainingResource,
 		metricAzureRateLimitHeaderParseError,
