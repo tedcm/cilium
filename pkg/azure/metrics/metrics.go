@@ -238,6 +238,11 @@ func (m *MetricsExtractor) getRequestLimitResourceMetrics(response *http.Respons
 }
 
 func (m *MetricsExtractor) GetRespondDecorator() autorest.RespondDecorator {
+	operatorMetrics.Registry.MustRegister(
+		metricAzureRateLimitRemaining,
+		metricAzureRateLimitRemainingResource,
+		metricAzureRateLimitHeaderParseError,
+	)
 	return func(responder autorest.Responder) autorest.Responder {
 		return autorest.ResponderFunc(func(response *http.Response) error {
 			err := m.extractMetrics(response)
@@ -247,12 +252,4 @@ func (m *MetricsExtractor) GetRespondDecorator() autorest.RespondDecorator {
 			return responder.Respond(response)
 		})
 	}
-}
-
-func init() {
-	operatorMetrics.Registry.MustRegister(
-		metricAzureRateLimitRemaining,
-		metricAzureRateLimitRemainingResource,
-		metricAzureRateLimitHeaderParseError,
-	)
 }
