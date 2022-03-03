@@ -72,7 +72,7 @@ func NewClient(subscriptionID, resourceGroup string, metrics MetricsAPI, rateLim
 		metricsAPI:      metrics,
 		limiter:         helpers.NewApiLimiter(metrics, rateLimit, burst),
 	}
-	azureMetrics := azuremetrics.NewMetricsExtractor(log, "TODO", subscriptionID, "Microsoft.Compute")
+	azureMetrics := azuremetrics.NewMetricsExtractor(log, "TODO", subscriptionID, "Microsoft.Compute", registry)
 
 	// Authorizer based on file first and then environment variables
 	authorizer, err := auth.NewAuthorizerFromFile(compute.DefaultBaseURI)
@@ -85,16 +85,16 @@ func NewClient(subscriptionID, resourceGroup string, metrics MetricsAPI, rateLim
 
 	c.interfaces.Authorizer = authorizer
 	c.interfaces.AddToUserAgent(userAgent)
-	c.interfaces.ResponseInspector = azureMetrics.GetRespondDecorator(registry)
+	c.interfaces.ResponseInspector = azureMetrics.GetRespondDecorator()
 	c.virtualnetworks.Authorizer = authorizer
 	c.virtualnetworks.AddToUserAgent(userAgent)
-	c.virtualnetworks.ResponseInspector = azureMetrics.GetRespondDecorator(registry)
+	c.virtualnetworks.ResponseInspector = azureMetrics.GetRespondDecorator()
 	c.vmss.Authorizer = authorizer
 	c.vmss.AddToUserAgent(userAgent)
-	c.vmss.ResponseInspector = azureMetrics.GetRespondDecorator(registry)
+	c.vmss.ResponseInspector = azureMetrics.GetRespondDecorator()
 	c.vmscalesets.Authorizer = authorizer
 	c.vmscalesets.AddToUserAgent(userAgent)
-	c.vmscalesets.ResponseInspector = azureMetrics.GetRespondDecorator(registry)
+	c.vmscalesets.ResponseInspector = azureMetrics.GetRespondDecorator()
 
 	return c, nil
 }

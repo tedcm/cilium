@@ -116,7 +116,12 @@ type MetricsExtractor struct {
 	resourceType   string
 }
 
-func NewMetricsExtractor(logger *logrus.Entry, tenantID string, subscriptionID string, resourceType string) *MetricsExtractor {
+func NewMetricsExtractor(logger *logrus.Entry, tenantID string, subscriptionID string, resourceType string, registry *prometheus.Registry) *MetricsExtractor {
+	registry.MustRegister(
+		metricAzureRateLimitRemaining,
+		metricAzureRateLimitRemainingResource,
+		metricAzureRateLimitHeaderParseError,
+	)
 	return &MetricsExtractor{
 		logger:         logger,
 		tenantID:       tenantID,
@@ -236,12 +241,7 @@ func (m *MetricsExtractor) getRequestLimitResourceMetrics(response *http.Respons
 	return ret, nil
 }
 
-func (m *MetricsExtractor) GetRespondDecorator(registry *prometheus.Registry) autorest.RespondDecorator {
-	registry.MustRegister(
-		metricAzureRateLimitRemaining,
-		metricAzureRateLimitRemainingResource,
-		metricAzureRateLimitHeaderParseError,
-	)
+func (m *MetricsExtractor) GetRespondDecorator() autorest.RespondDecorator {
 	return func(responder autorest.Responder) autorest.Responder {
 		return autorest.ResponderFunc(func(response *http.Response) error {
 			err := m.extractMetrics(response)
