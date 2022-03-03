@@ -30,6 +30,7 @@ import (
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/rand"
 	"github.com/cilium/cilium/pkg/spanstat"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-07-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2019-09-01/network"
@@ -61,7 +62,7 @@ type MetricsAPI interface {
 }
 
 // NewClient returns a new Azure client
-func NewClient(subscriptionID, resourceGroup string, metrics MetricsAPI, rateLimit float64, burst int) (*Client, error) {
+func NewClient(subscriptionID, resourceGroup string, metrics MetricsAPI, rateLimit float64, burst int, registry *prometheus.Registry) (*Client, error) {
 	c := &Client{
 		resourceGroup:   resourceGroup,
 		interfaces:      network.NewInterfacesClient(subscriptionID),
@@ -84,16 +85,16 @@ func NewClient(subscriptionID, resourceGroup string, metrics MetricsAPI, rateLim
 
 	c.interfaces.Authorizer = authorizer
 	c.interfaces.AddToUserAgent(userAgent)
-	c.interfaces.ResponseInspector = azureMetrics.GetRespondDecorator()
+	c.interfaces.ResponseInspector = azureMetrics.GetRespondDecorator(registry)
 	c.virtualnetworks.Authorizer = authorizer
 	c.virtualnetworks.AddToUserAgent(userAgent)
-	c.virtualnetworks.ResponseInspector = azureMetrics.GetRespondDecorator()
+	c.virtualnetworks.ResponseInspector = azureMetrics.GetRespondDecorator(registry)
 	c.vmss.Authorizer = authorizer
 	c.vmss.AddToUserAgent(userAgent)
-	c.vmss.ResponseInspector = azureMetrics.GetRespondDecorator()
+	c.vmss.ResponseInspector = azureMetrics.GetRespondDecorator(registry)
 	c.vmscalesets.Authorizer = authorizer
 	c.vmscalesets.AddToUserAgent(userAgent)
-	c.vmscalesets.ResponseInspector = azureMetrics.GetRespondDecorator()
+	c.vmscalesets.ResponseInspector = azureMetrics.GetRespondDecorator(registry)
 
 	return c, nil
 }

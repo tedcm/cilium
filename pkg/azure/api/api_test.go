@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build !privileged_tests
 // +build !privileged_tests
 
 package api
@@ -22,6 +23,7 @@ import (
 	"time"
 
 	"github.com/cilium/cilium/pkg/api/metrics/mock"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"gopkg.in/check.v1"
 )
@@ -36,7 +38,8 @@ var _ = check.Suite(&ApiSuite{})
 
 func (a *ApiSuite) TestRateLimit(c *check.C) {
 	metricsAPI := mock.NewMockMetrics()
-	client, err := NewClient("dummy-subscription", "dummy-resource-group", metricsAPI, 10.0, 4)
+	registry := prometheus.Registry{}
+	client, err := NewClient("dummy-subscription", "dummy-resource-group", metricsAPI, 10.0, 4, &registry)
 	c.Assert(err, check.IsNil)
 	c.Assert(client, check.Not(check.IsNil))
 
