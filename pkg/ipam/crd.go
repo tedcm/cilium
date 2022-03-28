@@ -446,14 +446,6 @@ func (n *nodeStore) setOwnNodeWithoutPoolUpdate(node *ciliumv2.CiliumNode) {
 	n.mutex.Unlock()
 }
 
-// setOwnNodeWithoutPoolUpdate overwrites the local node copy (e.g. to update
-// its resourceVersion) without updating the available IP pool.
-func (n *nodeStore) setOwnNodeWithoutPoolUpdate(node *ciliumv2.CiliumNode) {
-	n.mutex.Lock()
-	n.ownNode = node
-	n.mutex.Unlock()
-}
-
 // refreshNodeTrigger is called to refresh the custom resource after taking the
 // configured rate limiting into account
 //
