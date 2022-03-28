@@ -1076,7 +1076,9 @@ func (n *linuxNodeHandler) nodeDelete(oldNode *nodeTypes.Node) error {
 	}
 
 	if n.nodeConfig.EnableIPSec {
-		n.deleteIPsec(oldNode)
+		if oldNode.IsLocal() || !n.subnetEncryption() {
+			n.deleteIPsec(oldNode)
+		}
 	}
 
 	if option.Config.EnableWireguard {
@@ -1228,13 +1230,10 @@ func (n *linuxNodeHandler) createNodeExternalIPSecOutRoute(ip *net.IPNet, dflt b
 	}
 }
 
-// replaceNodeIPSecOutRoute replace the out IPSec route in the host routing table
-// with the new route. If no route exists the route is installed on the host.
+// replaceNodeIPSecOutRoute replace the out IPSec route in the host routing
+// table with the new route. If no route exists the route is installed on the
+// host. The caller must ensure that the CIDR passed in must be non-nil.
 func (n *linuxNodeHandler) replaceNodeIPSecOutRoute(ip *net.IPNet) {
-	if ip == nil {
-		return
-	}
-
 	if ip.IP.To4() != nil {
 		if !n.nodeConfig.EnableIPv4 {
 			return
@@ -1247,17 +1246,14 @@ func (n *linuxNodeHandler) replaceNodeIPSecOutRoute(ip *net.IPNet) {
 
 	_, err := route.Upsert(n.createNodeIPSecOutRoute(ip))
 	if err != nil {
-		log.WithError(err).Error("Unable to replace the IPSec route OUT the host routing table")
+		log.WithError(err).WithField(logfields.CIDR, ip).Error("Unable to replace the IPSec route OUT the host routing table")
 	}
 }
 
-// replaceNodeExternalIPSecOutRoute replace the out IPSec route in the host routing table
-// with the new route. If no route exists the route is installed on the host.
+// replaceNodeExternalIPSecOutRoute replace the out IPSec route in the host
+// routing table with the new route. If no route exists the route is installed
+// on the host. The caller must ensure that the CIDR passed in must be non-nil.
 func (n *linuxNodeHandler) replaceNodeExternalIPSecOutRoute(ip *net.IPNet) {
-	if ip == nil {
-		return
-	}
-
 	if ip.IP.To4() != nil {
 		if !n.nodeConfig.EnableIPv4 {
 			return
@@ -1270,19 +1266,16 @@ func (n *linuxNodeHandler) replaceNodeExternalIPSecOutRoute(ip *net.IPNet) {
 
 	_, err := route.Upsert(n.createNodeExternalIPSecOutRoute(ip, true))
 	if err != nil {
-		log.WithError(err).Error("Unable to replace the IPSec route OUT the default routing table")
+		log.WithError(err).WithField(logfields.CIDR, ip).Error("Unable to replace the IPSec route OUT the default routing table")
 	}
 	_, err = route.Upsert(n.createNodeExternalIPSecOutRoute(ip, false))
 	if err != nil {
-		log.WithError(err).Error("Unable to replace the IPSec route OUT the host routing table")
+		log.WithError(err).WithField(logfields.CIDR, ip).Error("Unable to replace the IPSec route OUT the host routing table")
 	}
 }
 
+// The caller must ensure that the CIDR passed in must be non-nil.
 func (n *linuxNodeHandler) deleteNodeIPSecOutRoute(ip *net.IPNet) {
-	if ip == nil {
-		return
-	}
-
 	if ip.IP.To4() != nil {
 		if !n.nodeConfig.EnableIPv4 {
 			return
@@ -1294,15 +1287,12 @@ func (n *linuxNodeHandler) deleteNodeIPSecOutRoute(ip *net.IPNet) {
 	}
 
 	if err := route.Delete(n.createNodeIPSecOutRoute(ip)); err != nil {
-		log.WithError(err).Error("Unable to delete the IPsec route OUT from the host routing table")
+		log.WithError(err).WithField(logfields.CIDR, ip).Error("Unable to delete the IPsec route OUT from the host routing table")
 	}
 }
 
+// The caller must ensure that the CIDR passed in must be non-nil.
 func (n *linuxNodeHandler) deleteNodeExternalIPSecOutRoute(ip *net.IPNet) {
-	if ip == nil {
-		return
-	}
-
 	if ip.IP.To4() != nil {
 		if !n.nodeConfig.EnableIPv4 {
 			return
@@ -1314,21 +1304,18 @@ func (n *linuxNodeHandler) deleteNodeExternalIPSecOutRoute(ip *net.IPNet) {
 	}
 
 	if err := route.Delete(n.createNodeExternalIPSecOutRoute(ip, true)); err != nil {
-		log.WithError(err).Error("Unable to delete the IPsec route External OUT from the ipsec routing table")
+		log.WithError(err).WithField(logfields.CIDR, ip).Error("Unable to delete the IPsec route External OUT from the ipsec routing table")
 	}
 
 	if err := route.Delete(n.createNodeExternalIPSecOutRoute(ip, false)); err != nil {
-		log.WithError(err).Error("Unable to delete the IPsec route External OUT from the host routing table")
+		log.WithError(err).WithField(logfields.CIDR, ip).Error("Unable to delete the IPsec route External OUT from the host routing table")
 	}
 }
 
-// replaceNodeIPSecoInRoute replace the in IPSec routes in the host routing table
-// with the new route. If no route exists the route is installed on the host.
+// replaceNodeIPSecoInRoute replace the in IPSec routes in the host routing
+// table with the new route. If no route exists the route is installed on the
+// host. The caller must ensure that the CIDR passed in must be non-nil.
 func (n *linuxNodeHandler) replaceNodeIPSecInRoute(ip *net.IPNet) {
-	if ip == nil {
-		return
-	}
-
 	if ip.IP.To4() != nil {
 		if !n.nodeConfig.EnableIPv4 {
 			return
@@ -1341,7 +1328,7 @@ func (n *linuxNodeHandler) replaceNodeIPSecInRoute(ip *net.IPNet) {
 
 	_, err := route.Upsert(n.createNodeIPSecInRoute(ip))
 	if err != nil {
-		log.WithError(err).Error("Unable to replace the IPSec route IN the host routing table")
+		log.WithError(err).WithField(logfields.CIDR, ip).Error("Unable to replace the IPSec route IN the host routing table")
 	}
 }
 
@@ -1438,7 +1425,8 @@ func (n *linuxNodeHandler) NodeConfigurationChanged(newConfig datapath.LocalNode
 	if newConfig.EnableIPSec {
 		// For the ENI ipam mode on EKS, this will be the interface that
 		// the router (cilium_host) IP is associated to.
-		if option.Config.IPAM == ipamOption.IPAMENI && len(option.Config.IPv4PodSubnets) == 0 {
+		if (option.Config.IPAM == ipamOption.IPAMENI || option.Config.IPAM == ipamOption.IPAMAzure) &&
+			len(option.Config.IPv4PodSubnets) == 0 {
 			if info := node.GetRouterInfo(); info != nil {
 				var ipv4PodSubnets []*net.IPNet
 				for _, c := range info.GetIPv4CIDRs() {
