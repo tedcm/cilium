@@ -11,14 +11,14 @@ import (
 	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
-// Describes attributes of your AWS account. The following are the supported
-// account attributes:
+// Describes attributes of your Amazon Web Services account. The following are the
+// supported account attributes:
 //
-// * supported-platforms: Indicates whether your account can
-// launch instances into EC2-Classic and EC2-VPC, or only into EC2-VPC.
+// * supported-platforms: Indicates whether your
+// account can launch instances into EC2-Classic and EC2-VPC, or only into
+// EC2-VPC.
 //
-// *
-// default-vpc: The ID of the default VPC for your account, or none.
+// * default-vpc: The ID of the default VPC for your account, or none.
 //
 // *
 // max-instances: This attribute is no longer supported. The returned value does
@@ -42,7 +42,7 @@ func (c *Client) DescribeAccountAttributes(ctx context.Context, params *Describe
 		params = &DescribeAccountAttributesInput{}
 	}
 
-	result, metadata, err := c.invokeOperation(ctx, "DescribeAccountAttributes", params, optFns, addOperationDescribeAccountAttributesMiddlewares)
+	result, metadata, err := c.invokeOperation(ctx, "DescribeAccountAttributes", params, optFns, c.addOperationDescribeAccountAttributesMiddlewares)
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +61,9 @@ type DescribeAccountAttributesInput struct {
 	// actually making the request, and provides an error response. If you have the
 	// required permissions, the error response is DryRunOperation. Otherwise, it is
 	// UnauthorizedOperation.
-	DryRun bool
+	DryRun *bool
+
+	noSmithyDocumentSerde
 }
 
 type DescribeAccountAttributesOutput struct {
@@ -71,9 +73,11 @@ type DescribeAccountAttributesOutput struct {
 
 	// Metadata pertaining to the operation's result.
 	ResultMetadata middleware.Metadata
+
+	noSmithyDocumentSerde
 }
 
-func addOperationDescribeAccountAttributesMiddlewares(stack *middleware.Stack, options Options) (err error) {
+func (c *Client) addOperationDescribeAccountAttributesMiddlewares(stack *middleware.Stack, options Options) (err error) {
 	err = stack.Serialize.Add(&awsEc2query_serializeOpDescribeAccountAttributes{}, middleware.After)
 	if err != nil {
 		return err

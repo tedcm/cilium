@@ -12,15 +12,15 @@ import (
 )
 
 // Describes the running instances for the specified EC2 Fleet. For more
-// information, see Monitoring your EC2 Fleet
-// (https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-fleet.html#monitor-ec2-fleet)
+// information, see Monitor your EC2 Fleet
+// (https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/manage-ec2-fleet.html#monitor-ec2-fleet)
 // in the Amazon EC2 User Guide.
 func (c *Client) DescribeFleetInstances(ctx context.Context, params *DescribeFleetInstancesInput, optFns ...func(*Options)) (*DescribeFleetInstancesOutput, error) {
 	if params == nil {
 		params = &DescribeFleetInstancesInput{}
 	}
 
-	result, metadata, err := c.invokeOperation(ctx, "DescribeFleetInstances", params, optFns, addOperationDescribeFleetInstancesMiddlewares)
+	result, metadata, err := c.invokeOperation(ctx, "DescribeFleetInstances", params, optFns, c.addOperationDescribeFleetInstancesMiddlewares)
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +41,7 @@ type DescribeFleetInstancesInput struct {
 	// actually making the request, and provides an error response. If you have the
 	// required permissions, the error response is DryRunOperation. Otherwise, it is
 	// UnauthorizedOperation.
-	DryRun bool
+	DryRun *bool
 
 	// The filters.
 	//
@@ -51,10 +51,12 @@ type DescribeFleetInstancesInput struct {
 	// The maximum number of results to return in a single call. Specify a value
 	// between 1 and 1000. The default value is 1000. To retrieve the remaining
 	// results, make another call with the returned NextToken value.
-	MaxResults int32
+	MaxResults *int32
 
 	// The token for the next set of results.
 	NextToken *string
+
+	noSmithyDocumentSerde
 }
 
 type DescribeFleetInstancesOutput struct {
@@ -71,9 +73,11 @@ type DescribeFleetInstancesOutput struct {
 
 	// Metadata pertaining to the operation's result.
 	ResultMetadata middleware.Metadata
+
+	noSmithyDocumentSerde
 }
 
-func addOperationDescribeFleetInstancesMiddlewares(stack *middleware.Stack, options Options) (err error) {
+func (c *Client) addOperationDescribeFleetInstancesMiddlewares(stack *middleware.Stack, options Options) (err error) {
 	err = stack.Serialize.Add(&awsEc2query_serializeOpDescribeFleetInstances{}, middleware.After)
 	if err != nil {
 		return err

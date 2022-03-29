@@ -22,7 +22,7 @@ func (c *Client) CreateVpcEndpointConnectionNotification(ctx context.Context, pa
 		params = &CreateVpcEndpointConnectionNotificationInput{}
 	}
 
-	result, metadata, err := c.invokeOperation(ctx, "CreateVpcEndpointConnectionNotification", params, optFns, addOperationCreateVpcEndpointConnectionNotificationMiddlewares)
+	result, metadata, err := c.invokeOperation(ctx, "CreateVpcEndpointConnectionNotification", params, optFns, c.addOperationCreateVpcEndpointConnectionNotificationMiddlewares)
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +46,7 @@ type CreateVpcEndpointConnectionNotificationInput struct {
 	ConnectionNotificationArn *string
 
 	// Unique, case-sensitive identifier that you provide to ensure the idempotency of
-	// the request. For more information, see How to Ensure Idempotency
+	// the request. For more information, see How to ensure idempotency
 	// (https://docs.aws.amazon.com/AWSEC2/latest/APIReference/Run_Instance_Idempotency.html).
 	ClientToken *string
 
@@ -54,13 +54,15 @@ type CreateVpcEndpointConnectionNotificationInput struct {
 	// actually making the request, and provides an error response. If you have the
 	// required permissions, the error response is DryRunOperation. Otherwise, it is
 	// UnauthorizedOperation.
-	DryRun bool
+	DryRun *bool
 
 	// The ID of the endpoint service.
 	ServiceId *string
 
 	// The ID of the endpoint.
 	VpcEndpointId *string
+
+	noSmithyDocumentSerde
 }
 
 type CreateVpcEndpointConnectionNotificationOutput struct {
@@ -74,9 +76,11 @@ type CreateVpcEndpointConnectionNotificationOutput struct {
 
 	// Metadata pertaining to the operation's result.
 	ResultMetadata middleware.Metadata
+
+	noSmithyDocumentSerde
 }
 
-func addOperationCreateVpcEndpointConnectionNotificationMiddlewares(stack *middleware.Stack, options Options) (err error) {
+func (c *Client) addOperationCreateVpcEndpointConnectionNotificationMiddlewares(stack *middleware.Stack, options Options) (err error) {
 	err = stack.Serialize.Add(&awsEc2query_serializeOpCreateVpcEndpointConnectionNotification{}, middleware.After)
 	if err != nil {
 		return err

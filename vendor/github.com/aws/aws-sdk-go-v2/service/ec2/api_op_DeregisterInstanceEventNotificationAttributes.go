@@ -18,7 +18,7 @@ func (c *Client) DeregisterInstanceEventNotificationAttributes(ctx context.Conte
 		params = &DeregisterInstanceEventNotificationAttributesInput{}
 	}
 
-	result, metadata, err := c.invokeOperation(ctx, "DeregisterInstanceEventNotificationAttributes", params, optFns, addOperationDeregisterInstanceEventNotificationAttributesMiddlewares)
+	result, metadata, err := c.invokeOperation(ctx, "DeregisterInstanceEventNotificationAttributes", params, optFns, c.addOperationDeregisterInstanceEventNotificationAttributesMiddlewares)
 	if err != nil {
 		return nil, err
 	}
@@ -34,10 +34,12 @@ type DeregisterInstanceEventNotificationAttributesInput struct {
 	// actually making the request, and provides an error response. If you have the
 	// required permissions, the error response is DryRunOperation. Otherwise, it is
 	// UnauthorizedOperation.
-	DryRun bool
+	DryRun *bool
 
 	// Information about the tag keys to deregister.
 	InstanceTagAttribute *types.DeregisterInstanceTagAttributeRequest
+
+	noSmithyDocumentSerde
 }
 
 type DeregisterInstanceEventNotificationAttributesOutput struct {
@@ -47,9 +49,11 @@ type DeregisterInstanceEventNotificationAttributesOutput struct {
 
 	// Metadata pertaining to the operation's result.
 	ResultMetadata middleware.Metadata
+
+	noSmithyDocumentSerde
 }
 
-func addOperationDeregisterInstanceEventNotificationAttributesMiddlewares(stack *middleware.Stack, options Options) (err error) {
+func (c *Client) addOperationDeregisterInstanceEventNotificationAttributesMiddlewares(stack *middleware.Stack, options Options) (err error) {
 	err = stack.Serialize.Add(&awsEc2query_serializeOpDeregisterInstanceEventNotificationAttributes{}, middleware.After)
 	if err != nil {
 		return err
