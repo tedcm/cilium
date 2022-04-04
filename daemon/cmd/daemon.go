@@ -268,25 +268,25 @@ func createPrefixLengthCounter() *counter.PrefixLengthCounter {
 // IP.
 func restoreCiliumHostIPs(ipv6 bool, fromK8s net.IP) {
 	var (
-		cidr   *cidr.CIDR
+		cidrs  []*cidr.CIDR
 		fromFS net.IP
 	)
 
 	if ipv6 {
-		cidr = node.GetIPv6AllocRange()
+		cidrs = append(cidrs, node.GetIPv6AllocRange())
 		fromFS = node.GetIPv6Router()
 	} else {
 		switch option.Config.IPAMMode() {
 		case ipamOption.IPAMCRD, ipamOption.IPAMENI, ipamOption.IPAMAzure, ipamOption.IPAMAlibabaCloud:
 			// The native routing CIDR is the pod CIDR in these IPAM modes.
-			cidr = option.Config.IPv4NativeRoutingCIDR()
+			cidrs = append(cidrs, option.Config.IPv4NativeRoutingCIDR())
 		default:
-			cidr = node.GetIPv4AllocRange()
+			cidrs = append(cidrs, node.GetIPv4AllocRange())
 		}
 		fromFS = node.GetInternalIPv4Router()
 	}
 
-	restoredIP := node.RestoreHostIPs(ipv6, fromK8s, fromFS, cidr)
+	restoredIP := node.RestoreHostIPs(ipv6, fromK8s, fromFS, cidrs)
 	if err := removeOldRouterState(restoredIP); err != nil {
 		log.WithError(err).Warnf(
 			"Failed to remove old router IPs (restored IP: %s) from cilium_host. Manual intervention is required to remove all other old IPs.",
