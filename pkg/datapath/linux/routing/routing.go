@@ -124,6 +124,27 @@ func (info *RoutingInfo) Configure(ip net.IP, mtu int, compat bool) error {
 	return nil
 }
 
+// DeleteEndpointIngressRule handles deletion of endpoint's ingress rules
+func DeleteEndpointIngressRule(ip net.IP) error {
+	ipWithMask := net.IPNet{
+		IP:   ip,
+		Mask: net.CIDRMask(32, 32),
+	}
+	ingress := route.Rule{
+		Priority: linux_defaults.RulePriorityIngress,
+		To:       &ipWithMask,
+		Table:    route.MainTable,
+	}
+	if err := deleteRule(ingress); err != nil {
+		return fmt.Errorf("unable to delete ingress rule from main table with ip %s: %v", ipWithMask.String(), err)
+	}
+	scopedLog := log.WithFields(logrus.Fields{
+		"ip": ipWithMask.String(),
+	})
+	scopedLog.WithField("rule", ingress).Debug("Deleted ingress rule")
+	return nil
+}
+
 // Delete removes the ingress and egress rules that control traffic for
 // endpoints. Note that the routes referenced by the rules are not deleted as
 // they can be reused when another endpoint is created on the same node. The
@@ -160,17 +181,26 @@ func Delete(ip net.IP, compat bool) error {
 		"ip": ipWithMask.String(),
 	})
 
-	// Ingress rules
-	ingress := route.Rule{
-		Priority: linux_defaults.RulePriorityIngress,
-		To:       &ipWithMask,
-		Table:    route.MainTable,
+	if option.Config.EnableUnreachableRoutes {
+		// Replace route to old IP with an unreachable route. This will
+		//   - trigger ICMP error messages for clients attempting to connect to the stale IP
+		//   - avoid hitting rp_filter and getting Martian packet warning
+		// When the IP is reused, the unreachable route will be replaced to target the new pod veth
+		// In CRD-based IPAM, when an IP is unassigned from the CiliumNode, we delete this route
+		// to avoid blackholing traffic to this IP if it gets reassigned to another node
+		if err := netlink.RouteReplace(&netlink.Route{
+			Dst:   &ipWithMask,
+			Table: route.MainTable,
+			Type:  unix.RTN_UNREACHABLE,
+		}); err != nil {
+			return fmt.Errorf("unable to add unreachable route for ip %s: %w", ipWithMask.String(), err)
+		}
+	} else {
+		// Deleting ingress rule when unreachable routes is enabled will cause traffic from another local endpoint to
+		// be dropped by rp_filter since the reverse lookup fails. When unreachable routes are enabled, endpoint
+		// ingress rules are deleted only when the IP is released from the node.
+		DeleteEndpointIngressRule(ip)
 	}
-	if err := deleteRule(ingress); err != nil {
-		return fmt.Errorf("unable to delete ingress rule from main table with ip %s: %v", ipWithMask.String(), err)
-	}
-
-	scopedLog.WithField("rule", ingress).Debug("Deleted ingress rule")
 
 	priority := linux_defaults.RulePriorityEgressv2
 	if compat {
@@ -210,22 +240,6 @@ func Delete(ip net.IP, compat bool) error {
 			return fmt.Errorf("unable to delete egress rule with ip %s: %w", ipWithMask.String(), err)
 		}
 		scopedLog.WithField(logfields.Rule, egress).Debug("Deleted egress rule")
-	}
-
-	if option.Config.EnableUnreachableRoutes {
-		// Replace route to old IP with an unreachable route. This will
-		//   - trigger ICMP error messages for clients attempting to connect to the stale IP
-		//   - avoid hitting rp_filter and getting Martian packet warning
-		// When the IP is reused, the unreachable route will be replaced to target the new pod veth
-		// In CRD-based IPAM, when an IP is unassigned from the CiliumNode, we delete this route
-		// to avoid blackholing traffic to this IP if it gets reassigned to another node
-		if err := netlink.RouteReplace(&netlink.Route{
-			Dst:   &ipWithMask,
-			Table: route.MainTable,
-			Type:  unix.RTN_UNREACHABLE,
-		}); err != nil {
-			return fmt.Errorf("unable to add unreachable route for ip %s: %w", ipWithMask.String(), err)
-		}
 	}
 
 	return nil

@@ -24,6 +24,7 @@ import (
 
 	alibabaCloud "github.com/cilium/cilium/pkg/alibabacloud/utils"
 	"github.com/cilium/cilium/pkg/cidr"
+	linuxrouting "github.com/cilium/cilium/pkg/datapath/linux/routing"
 	"github.com/cilium/cilium/pkg/ip"
 	ipamOption "github.com/cilium/cilium/pkg/ipam/option"
 	ipamTypes "github.com/cilium/cilium/pkg/ipam/types"
@@ -376,7 +377,7 @@ func (n *nodeStore) updateLocalNodeResource(node *ciliumv2.CiliumNode) {
 				delete(n.ownNode.Status.IPAM.ReleaseIPs, ip)
 				releaseUpstreamSyncNeeded = true
 
-				// Remove the unreachable route for this IP
+				// Remove the ingress rules and unreachable route for this IP
 				if n.conf.UnreachableRoutesEnabled() {
 					parsedIP := net.ParseIP(ip)
 					if parsedIP == nil {
@@ -385,7 +386,14 @@ func (n *nodeStore) updateLocalNodeResource(node *ciliumv2.CiliumNode) {
 						continue
 					}
 
-					err := netlink.RouteDel(&netlink.Route{
+					err := linuxrouting.DeleteEndpointIngressRule(parsedIP)
+					if err != nil {
+						log.WithError(err).Warningf("IP release cleanup error")
+						// skip deleting unreachable route
+						continue
+					}
+
+					err = netlink.RouteDel(&netlink.Route{
 						Dst:   &net.IPNet{IP: parsedIP, Mask: net.CIDRMask(32, 32)},
 						Table: unix.RT_TABLE_MAIN,
 						Type:  unix.RTN_UNREACHABLE,
