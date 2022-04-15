@@ -83,7 +83,7 @@ rollOutCiliumPods: false
 image:
   override: ~
   repository: quay.io/cilium/cilium
-  tag: v1.10.9
+  tag: v1.10.10
   pullPolicy: IfNotPresent
   # cilium-digest
   digest: ""
@@ -491,8 +491,14 @@ eni:
   # See https://github.com/aws/amazon-eks-pod-identity-webhook
   iamRole: ""
   # -- Filter via subnet IDs which will dictate which subnets are going to be used to create new ENIs
+  # Important note: This requires that each instance has an ENI with a matching subnet attached
+  # when Cilium is deployed. If you only want to control subnets for ENIs attached by Cilium,
+  # use the CNI configuration file settings (cni.customConf) instead.
   subnetIDsFilter: ""
   # -- Filter via tags (k=v) which will dictate which subnets are going to be used to create new ENIs
+  # Important note: This requires that each instance has an ENI with a matching subnet attached
+  # when Cilium is deployed. If you only want to control subnets for ENIs attached by Cilium,
+  # use the CNI configuration file settings (cni.customConf) instead.
   subnetTagsFilter: ""
 
 externalIPs:
@@ -653,7 +659,7 @@ hubble:
     image:
       override: ~
       repository: quay.io/cilium/hubble-relay
-      tag: v1.10.9
+      tag: v1.10.10
        # hubble-relay-digest
       digest: ""
       useDigest: false
@@ -1233,7 +1239,7 @@ operator:
   image:
     override: ~
     repository: quay.io/cilium/operator
-    tag: v1.10.9
+    tag: v1.10.10
     # operator-generic-digest
     genericDigest: ""
     # operator-azure-digest
@@ -1453,7 +1459,7 @@ nodeinit:
 
   # -- bootstrapFile is the location of the file where the bootstrap timestamp is
   # written by the node-init DaemonSet
-  bootstrapFile: "/tmp/cilium-bootstrap-time"
+  bootstrapFile: "/tmp/cilium-bootstrap.d/cilium-bootstrap-time"
 
 preflight:
   # -- Enable Cilium pre-flight resources (required for upgrade)
@@ -1462,7 +1468,7 @@ preflight:
   # -- Cilium pre-flight image.
   image:
     repository: quay.io/cilium/cilium
-    tag: v1.10.9
+    tag: v1.10.10
     # cilium-digest
     digest: ""
     useDigest: false
@@ -1601,7 +1607,7 @@ clustermesh:
     # -- Clustermesh API server image.
     image:
       repository: quay.io/cilium/clustermesh-apiserver
-      tag: v1.10.9
+      tag: v1.10.10
       # clustermesh-apiserver-digest
       digest: ""
       useDigest: false

@@ -138,7 +138,7 @@ spec:
                     fi
 
 {{- if not (eq .Values.nodeinit.bootstrapFile "") }}
-                    rm -f {{ .Values.nodeinit.bootstrapFile }}
+                    rm -f {{ .Values.nodeinit.bootstrapFile | quote }}
 {{- end }}
 
                     rm -f /tmp/node-init.cilium.io
@@ -173,8 +173,6 @@ spec:
                     echo "Node de-initialization complete"
 {{- end }}
           env:
-          - name: CHECKPOINT_PATH
-            value: /tmp/node-init.cilium.io
           # STARTUP_SCRIPT is the script run on node bootstrap. Node
           # bootstrapping can be customized in this script. This script is invoked
           # using nsenter, so it runs in the host's network and mount namespace using
@@ -294,7 +292,8 @@ spec:
 {{- end }}
 
 {{- if not (eq .Values.nodeinit.bootstrapFile "") }}
-              date > {{ .Values.nodeinit.bootstrapFile }}
+              mkdir -p {{ .Values.nodeinit.bootstrapFile | dir | quote }}
+              date > {{ .Values.nodeinit.bootstrapFile | quote }}
 {{- end }}
 
 {{- if .Values.nodeinit.restartPods }}

@@ -702,6 +702,10 @@ const (
 	// IdentityChangeGracePeriod option
 	IdentityChangeGracePeriod = "identity-change-grace-period"
 
+	// IdentityRestoreGracePeriod is the name of the
+	// IdentityRestoreGracePeriod option
+	IdentityRestoreGracePeriod = "identity-restore-grace-period"
+
 	// EnableHealthChecking is the name of the EnableHealthChecking option
 	EnableHealthChecking = "enable-health-checking"
 
@@ -1044,6 +1048,10 @@ const (
 	// is considered timed out
 	ProxyConnectTimeout = "proxy-connect-timeout"
 
+	// ProxyGID specifies the group ID that has access to unix domain sockets opened by Cilium
+	// agent for proxy configuration and access logging.
+	ProxyGID = "proxy-gid"
+
 	// ReadCNIConfiguration reads the CNI configuration file and extracts
 	// Cilium relevant information. This can be used to pass per node
 	// configuration to Cilium.
@@ -1382,6 +1390,10 @@ type DaemonConfig struct {
 	// connection attempt to have timed out.
 	ProxyConnectTimeout int
 
+	// ProxyGID specifies the group ID that has access to unix domain sockets opened by Cilium
+	// agent for proxy configuration and access logging.
+	ProxyGID int
+
 	// ProxyPrometheusPort specifies the port to serve Envoy metrics on.
 	ProxyPrometheusPort int
 
@@ -1600,6 +1612,13 @@ type DaemonConfig struct {
 	// already been allocated and other nodes in the cluster have a chance
 	// to whitelist the new upcoming identity of the endpoint.
 	IdentityChangeGracePeriod time.Duration
+
+	// IdentityRestoreGracePeriod is the grace period that needs to pass before CIDR identities
+	// restored during agent restart are released. If any of the restored identities remains
+	// unused after this time, they will be removed from the IP cache. Any of the restored
+	// identities that are used in network policies will remain in the IP cache until all such
+	// policies are removed.
+	IdentityRestoreGracePeriod time.Duration
 
 	// PolicyQueueSize is the size of the queues for the policy repository.
 	// A larger queue means that more events related to policy can be buffered.
@@ -2046,6 +2065,7 @@ var (
 		KVstoreConnectivityTimeout:   defaults.KVstoreConnectivityTimeout,
 		IPAllocationTimeout:          defaults.IPAllocationTimeout,
 		IdentityChangeGracePeriod:    defaults.IdentityChangeGracePeriod,
+		IdentityRestoreGracePeriod:   defaults.IdentityRestoreGracePeriod,
 		FixedIdentityMapping:         make(map[string]string),
 		KVStoreOpt:                   make(map[string]string),
 		LogOpt:                       make(map[string]string),
@@ -2500,6 +2520,7 @@ func (c *DaemonConfig) Populate() {
 	c.HTTPRetryCount = viper.GetInt(HTTPRetryCount)
 	c.HTTPRetryTimeout = viper.GetInt(HTTPRetryTimeout)
 	c.IdentityChangeGracePeriod = viper.GetDuration(IdentityChangeGracePeriod)
+	c.IdentityRestoreGracePeriod = viper.GetDuration(IdentityRestoreGracePeriod)
 	c.IPAM = viper.GetString(IPAM)
 	c.IPv4Range = viper.GetString(IPv4Range)
 	c.IPv4NodeAddr = viper.GetString(IPv4NodeAddr)
@@ -2560,6 +2581,7 @@ func (c *DaemonConfig) Populate() {
 	c.PrependIptablesChains = viper.GetBool(PrependIptablesChainsName)
 	c.PrometheusServeAddr = viper.GetString(PrometheusServeAddr)
 	c.ProxyConnectTimeout = viper.GetInt(ProxyConnectTimeout)
+	c.ProxyGID = viper.GetInt(ProxyGID)
 	c.ProxyPrometheusPort = viper.GetInt(ProxyPrometheusPort)
 	c.ReadCNIConfiguration = viper.GetString(ReadCNIConfiguration)
 	c.RestoreState = viper.GetBool(Restore)
@@ -2689,19 +2711,19 @@ func (c *DaemonConfig) Populate() {
 
 	if m, err := command.GetStringMapStringE(viper.GetViper(), KVStoreOpt); err != nil {
 		log.Fatalf("unable to parse %s: %s", KVStoreOpt, err)
-	} else if len(m) != 0 {
+	} else {
 		c.KVStoreOpt = m
 	}
 
 	if m, err := command.GetStringMapStringE(viper.GetViper(), LogOpt); err != nil {
 		log.Fatalf("unable to parse %s: %s", LogOpt, err)
-	} else if len(m) != 0 {
+	} else {
 		c.LogOpt = m
 	}
 
 	if m, err := command.GetStringMapStringE(viper.GetViper(), APIRateLimitName); err != nil {
 		log.Fatalf("unable to parse %s: %s", APIRateLimitName, err)
-	} else if len(m) != 0 {
+	} else {
 		c.APIRateLimit = m
 	}
 
