@@ -146,6 +146,7 @@ allocator
 allocators
 amd
 analytics
+annotateK
 ansible
 api
 apiKeys
@@ -463,6 +464,7 @@ installIptablesRules
 installNoConntrackIptablesRules
 integrations
 internet
+intervalSeconds
 intra
 io
 ip
@@ -635,6 +637,7 @@ nfsd
 nftables
 nginx
 nodeEncryption
+nodeGCInterval
 nodePort
 nodeSelector
 nodeX
@@ -659,6 +662,7 @@ parserfactory
 parsers
 pc
 pcap
+peerService
 perf
 periodSeconds
 pipelining
@@ -724,6 +728,7 @@ regex
 regexes
 relocations
 remoteNodeIdentity
+removeNodeTaints
 reparsing
 replicaset
 repo
@@ -747,6 +752,7 @@ runPath
 runtime
 runtimes
 sEventHandover
+sNode
 sNodes
 sService
 sServiceHost
@@ -769,6 +775,7 @@ serviceAccounts
 serviceMonitor
 servicePort
 sessionAffinity
+setNodeNetworkStatus
 setrlimit
 setupinterface
 setupiptables
@@ -868,6 +875,7 @@ uninstall
 uninstallOnExit
 unix
 unmanaged
+unmanagedPodWatcher
 unsettable
 untriaged
 untrusted
