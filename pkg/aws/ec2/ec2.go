@@ -45,6 +45,7 @@ type Client struct {
 	metricsAPI          MetricsAPI
 	subnetsFilters      []ec2_types.Filter
 	eniTagSpecification ec2_types.TagSpecification
+	usePrimary          bool
 }
 
 // MetricsAPI represents the metrics maintained by the AWS API client
@@ -54,7 +55,7 @@ type MetricsAPI interface {
 }
 
 // NewClient returns a new EC2 client
-func NewClient(ec2Client *ec2.Client, metrics MetricsAPI, rateLimit float64, burst int, subnetsFilters []ec2_types.Filter, eniTags map[string]string) *Client {
+func NewClient(ec2Client *ec2.Client, metrics MetricsAPI, rateLimit float64, burst int, subnetsFilters []ec2_types.Filter, eniTags map[string]string, usePrimary bool) *Client {
 	eniTagSpecification := ec2_types.TagSpecification{
 		ResourceType: ec2_types.ResourceTypeNetworkInterface,
 		Tags:         createAWSTagSlice(eniTags),
@@ -66,6 +67,7 @@ func NewClient(ec2Client *ec2.Client, metrics MetricsAPI, rateLimit float64, bur
 		limiter:             helpers.NewApiLimiter(metrics, rateLimit, burst),
 		subnetsFilters:      subnetsFilters,
 		eniTagSpecification: eniTagSpecification,
+		usePrimary:          usePrimary,
 	}
 }
 
@@ -158,7 +160,7 @@ func (c *Client) describeNetworkInterfaces(ctx context.Context, subnets ipamType
 
 // parseENI parses a ec2.NetworkInterface as returned by the EC2 service API,
 // converts it into a eniTypes.ENI object
-func parseENI(iface *ec2_types.NetworkInterface, vpcs ipamTypes.VirtualNetworkMap, subnets ipamTypes.SubnetMap) (instanceID string, eni *eniTypes.ENI, err error) {
+func parseENI(iface *ec2_types.NetworkInterface, vpcs ipamTypes.VirtualNetworkMap, subnets ipamTypes.SubnetMap, usePrimary bool) (instanceID string, eni *eniTypes.ENI, err error) {
 	if iface.PrivateIpAddress == nil {
 		err = fmt.Errorf("ENI has no IP address")
 		return
@@ -212,7 +214,10 @@ func parseENI(iface *ec2_types.NetworkInterface, vpcs ipamTypes.VirtualNetworkMa
 	}
 
 	for _, ip := range iface.PrivateIpAddresses {
-		if ip.PrivateIpAddress != nil && !aws.ToBool(ip.Primary) {
+		if !usePrimary && ip.Primary != nil && aws.ToBool(ip.Primary) {
+			continue
+		}
+		if ip.PrivateIpAddress != nil {
 			eni.Addresses = append(eni.Addresses, aws.ToString(ip.PrivateIpAddress))
 		}
 	}
@@ -247,7 +252,7 @@ func (c *Client) GetInstances(ctx context.Context, vpcs ipamTypes.VirtualNetwork
 	}
 
 	for _, iface := range networkInterfaces {
-		id, eni, err := parseENI(&iface, vpcs, subnets)
+		id, eni, err := parseENI(&iface, vpcs, subnets, c.usePrimary)
 		if err != nil {
 			return nil, err
 		}
@@ -399,7 +404,7 @@ func (c *Client) CreateNetworkInterface(ctx context.Context, toAllocate int32, s
 		return "", nil, err
 	}
 
-	_, eni, err := parseENI(output.NetworkInterface, nil, nil)
+	_, eni, err := parseENI(output.NetworkInterface, nil, nil, c.usePrimary)
 	if err != nil {
 		// The error is ignored on purpose. The allocation itself has
 		// succeeded. The ability to parse and return the ENI
