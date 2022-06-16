@@ -109,6 +109,10 @@ func (ds *DNSCacheTestSuite) TestDelete(c *C) {
 	for _, name := range []string{"test1.com", "test2.com", "test3.com"} {
 		ips := cache.lookupByTime(now, name)
 		c.Assert(len(ips), Equals, 2, Commentf("Wrong count of IPs returned (%v) for non-deleted name '%s'", ips, name))
+		c.Assert(cache.forward, checker.HasKey, name, Commentf("Expired name '%s' not deleted from forward", name))
+		for _, ip := range ips {
+			c.Assert(cache.reverse, checker.HasKey, ip.String(), Commentf("Expired IP '%s' not deleted from reverse", ip))
+		}
 	}
 
 	// Delete a single name and check that
@@ -121,9 +125,17 @@ func (ds *DNSCacheTestSuite) TestDelete(c *C) {
 	c.Assert(namesAffected[0], Equals, "test1.com", Commentf("Incorrect affected name returned on forced expire: %s", namesAffected))
 	ips := cache.lookupByTime(now, "test1.com")
 	c.Assert(len(ips), Equals, 0, Commentf("IPs returned (%v) for deleted name 'test1.com'", ips))
+	c.Assert(cache.forward, Not(checker.HasKey), "test1.com", Commentf("Expired name 'test1.com' not deleted from forward"))
+	for _, ip := range ips {
+		c.Assert(cache.reverse, Not(checker.HasKey), ip.String(), Commentf("Expired IP '%s' not deleted from reverse", ip))
+	}
 	for _, name := range []string{"test2.com", "test3.com"} {
 		ips = cache.lookupByTime(now, name)
 		c.Assert(len(ips), Equals, 2, Commentf("Wrong count of IPs returned (%v) for non-deleted name '%s'", ips, name))
+		c.Assert(cache.forward, checker.HasKey, name, Commentf("Expired name '%s' not deleted from forward", name))
+		for _, ip := range ips {
+			c.Assert(cache.reverse, checker.HasKey, ip.String(), Commentf("Expired IP '%s' not deleted from reverse", ip))
+		}
 	}
 
 	// Delete the whole cache. This should leave no data.
@@ -137,6 +149,8 @@ func (ds *DNSCacheTestSuite) TestDelete(c *C) {
 		ips = cache.lookupByTime(now, name)
 		c.Assert(len(ips), Equals, 0, Commentf("Returned IP data for %s after the cache was fully cleared: %v", name, ips))
 	}
+	c.Assert(cache.forward, HasLen, 0)
+	c.Assert(cache.reverse, HasLen, 0)
 	dump := cache.Dump()
 	c.Assert(len(dump), Equals, 0, Commentf("Returned cache entries from cache dump after the cache was fully cleared: %v", dump))
 }
@@ -278,6 +292,29 @@ func (ds *DNSCacheTestSuite) TestJSONMarshal(c *C) {
 		IPs := cache.lookupByTime(currentTime, name)
 		c.Assert(len(IPs), Equals, 0, Commentf("Returned IPs that should be expired for %s", name))
 	}
+}
+
+func (ds *DNSCacheTestSuite) TestCountIPs(c *C) {
+	names := map[string]net.IP{
+		"test1.com": net.ParseIP("1.1.1.1"),
+		"test2.com": net.ParseIP("2.2.2.2"),
+		"test3.com": net.ParseIP("3.3.3.3")}
+	sharedIP := net.ParseIP("8.8.8.8")
+	cache := NewDNSCache(0)
+
+	// Insert 3 records all sharing one IP and 1 unique IP.
+	cache.Update(now, "test1.com", []net.IP{sharedIP, names["test1.com"]}, 5)
+	cache.Update(now, "test2.com", []net.IP{sharedIP, names["test2.com"]}, 5)
+	cache.Update(now, "test3.com", []net.IP{sharedIP, names["test3.com"]}, 5)
+
+	fqdns, ips := cache.Count()
+
+	// Dump() returns the deduplicated (or consolidated) list of entries with
+	// length equal to CountFQDNs(), while CountIPs() returns the raw number of
+	// IPs.
+	c.Assert(len(cache.Dump()), Equals, len(names))
+	c.Assert(int(fqdns), Equals, len(names))
+	c.Assert(int(ips), Equals, len(names)*2)
 }
 
 /* Benchmarks
@@ -896,7 +933,14 @@ func (ds *DNSCacheTestSuite) TestCacheToZombiesGCCascade(c *C) {
 
 	// Cascade expirations from cache to zombies. The 3.3.3.3 lookup has not expired
 	now = now.Add(4 * time.Second)
-	cache.GC(now, zombies)
+	expired := cache.GC(now, zombies)
+	c.Assert(expired, HasLen, 1) // test.com
+	// Not all IPs expired (3.3.3.3 still alive) so we expect test.com to be
+	// present in the cache.
+	c.Assert(cache.forward, checker.HasKey, "test.com")
+	c.Assert(cache.reverse, checker.HasKey, "3.3.3.3")
+	c.Assert(cache.reverse, Not(checker.HasKey), "1.1.1.1")
+	c.Assert(cache.reverse, Not(checker.HasKey), "2.2.2.2")
 	alive, dead := zombies.GC()
 	c.Assert(dead, HasLen, 0)
 	assertZombiesContain(c, alive, map[string][]string{
@@ -907,7 +951,13 @@ func (ds *DNSCacheTestSuite) TestCacheToZombiesGCCascade(c *C) {
 	// Cascade expirations from cache to zombies. The 3.3.3.3 lookup has expired
 	// but the older zombies are still alive.
 	now = now.Add(4 * time.Second)
-	cache.GC(now, zombies)
+	expired = cache.GC(now, zombies)
+	c.Assert(expired, HasLen, 1) // test.com
+	// Now all IPs expired so we expect test.com to be removed from the cache.
+	c.Assert(cache.forward, Not(checker.HasKey), "test.com")
+	c.Assert(cache.forward, HasLen, 0)
+	c.Assert(cache.reverse, Not(checker.HasKey), "3.3.3.3")
+	c.Assert(cache.reverse, HasLen, 0)
 	alive, dead = zombies.GC()
 	c.Assert(dead, HasLen, 0)
 	assertZombiesContain(c, alive, map[string][]string{

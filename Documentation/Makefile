@@ -13,7 +13,7 @@ clean:
 
 builder-image: Dockerfile requirements.txt
 	# Pre-pull FROM docker images due to Buildkit sometimes failing to pull them.
-	grep "^FROM " $< | cut -d ' ' -f2 | xargs -n1 docker pull
+	grep "^FROM " $< | tr -d '\r' | cut -d ' ' -f2 | xargs -n1 docker pull
 	$(QUIET)tar c requirements.txt Dockerfile \
 	  | $(CONTAINER_ENGINE) build --tag cilium/docs-builder -
 
@@ -95,7 +95,7 @@ run-server: stop-server
 stop-server:
 	-$(QUIET)$(CONTAINER_ENGINE) container rm --force --volumes docs-cilium 2>/dev/null
 
-live-preview: stop-server
+live-preview: stop-server builder-image
 	@echo "$$(tput setaf 2)Running at http://localhost:$(DOCS_PORT)$$(tput sgr0)"
 	$(QUIET)$(DOCKER_CTR) \
 		--publish $(DOCS_PORT):8000 \

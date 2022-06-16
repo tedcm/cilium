@@ -893,11 +893,21 @@ func initializeFlags() {
 	flags.DurationVar(&option.Config.FQDNProxyResponseMaxDelay, option.FQDNProxyResponseMaxDelay, 100*time.Millisecond, "The maximum time the DNS proxy holds an allowed DNS response before sending it along. Responses are sent as soon as the datapath is updated with the new IP information.")
 	option.BindEnv(option.FQDNProxyResponseMaxDelay)
 
+	flags.Int(option.FQDNRegexCompileLRUSize, 1024, "Size of the FQDN regex compilation LRU. Useful for heavy but repeated FQDN MatchName or MatchPattern use")
+	flags.MarkHidden(option.FQDNRegexCompileLRUSize)
+	option.BindEnv(option.FQDNRegexCompileLRUSize)
+
 	flags.String(option.ToFQDNsPreCache, defaults.ToFQDNsPreCache, "DNS cache data at this path is preloaded on agent startup")
 	option.BindEnv(option.ToFQDNsPreCache)
 
 	flags.Bool(option.ToFQDNsEnableDNSCompression, defaults.ToFQDNsEnableDNSCompression, "Allow the DNS proxy to compress responses to endpoints that are larger than 512 Bytes or the EDNS0 option, if present")
 	option.BindEnv(option.ToFQDNsEnableDNSCompression)
+
+	flags.Int(option.DNSProxyConcurrencyLimit, 0, "Limit concurrency of DNS message processing")
+	option.BindEnv(option.DNSProxyConcurrencyLimit)
+
+	flags.Duration(option.DNSProxyConcurrencyProcessingGracePeriod, 0, "Grace time to wait when DNS proxy concurrent limit has been reached during DNS message processing")
+	option.BindEnv(option.DNSProxyConcurrencyProcessingGracePeriod)
 
 	flags.Int(option.PolicyQueueSize, defaults.PolicyQueueSize, "size of queues for policy-related events")
 	option.BindEnv(option.PolicyQueueSize)

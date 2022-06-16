@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net"
 	"path"
+	"strings"
 
 	"github.com/cilium/cilium/pkg/allocator"
 	"github.com/cilium/cilium/pkg/identity"
@@ -49,11 +50,12 @@ type GlobalIdentity struct {
 }
 
 // GetKey encodes an Identity as string
-func (gi GlobalIdentity) GetKey() (str string) {
+func (gi GlobalIdentity) GetKey() string {
+	var str strings.Builder
 	for _, l := range gi.LabelArray {
-		str += l.FormatForKVStore()
+		str.Write(l.FormatForKVStore())
 	}
-	return
+	return str.String()
 }
 
 // GetAsMap encodes a GlobalIdentity a map of keys to values. The keys will
@@ -327,7 +329,13 @@ func (m *CachingIdentityAllocator) AllocateIdentity(ctx context.Context, lbls la
 	defer func() {
 		if err == nil {
 			if allocated || isNewLocally {
-				metrics.Identity.Inc()
+				if id.ID.HasLocalScope() {
+					metrics.Identity.WithLabelValues(identity.NodeLocalIdentityType).Inc()
+				} else if id.ID.IsReservedIdentity() {
+					metrics.Identity.WithLabelValues(identity.ReservedIdentityType).Inc()
+				} else {
+					metrics.Identity.WithLabelValues(identity.ClusterLocalIdentityType).Inc()
+				}
 			}
 
 			if allocated && notifyOwner {
@@ -395,7 +403,13 @@ func (m *CachingIdentityAllocator) AllocateIdentity(ctx context.Context, lbls la
 func (m *CachingIdentityAllocator) Release(ctx context.Context, id *identity.Identity, notifyOwner bool) (released bool, err error) {
 	defer func() {
 		if released {
-			metrics.Identity.Dec()
+			if id.ID.HasLocalScope() {
+				metrics.Identity.WithLabelValues(identity.NodeLocalIdentityType).Dec()
+			} else if id.ID.IsReservedIdentity() {
+				metrics.Identity.WithLabelValues(identity.ReservedIdentityType).Dec()
+			} else {
+				metrics.Identity.WithLabelValues(identity.ClusterLocalIdentityType).Dec()
+			}
 		}
 		if m.owner != nil && released && notifyOwner {
 			deleted := IdentityCache{

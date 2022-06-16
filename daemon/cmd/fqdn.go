@@ -54,8 +54,10 @@ import (
 )
 
 const (
-	upstream       = "upstreamTime"
-	processingTime = "processingTime"
+	upstream        = "upstreamTime"
+	processingTime  = "processingTime"
+	semaphoreTime   = "semaphoreTime"
+	policyCheckTime = "policyCheckTime"
 
 	metricErrorTimeout = "timeout"
 	metricErrorProxy   = "proxyErr"
@@ -211,8 +213,21 @@ func (d *Daemon) bootstrapFQDN(possibleEndpoints map[uint16]*endpoint.Endpoint, 
 			// Cleanup each endpoint cache, deferring deletions via DNSZombies.
 			endpoints := d.endpointManager.GetEndpoints()
 			for _, ep := range endpoints {
+				epID := ep.StringID()
+				if option.Config.MetricsConfig.FQDNActiveNames || option.Config.MetricsConfig.FQDNActiveIPs {
+					countFQDNs, countIPs := ep.DNSHistory.Count()
+					if option.Config.MetricsConfig.FQDNActiveNames {
+						metrics.FQDNActiveNames.WithLabelValues(epID).Set(float64(countFQDNs))
+					}
+					if option.Config.MetricsConfig.FQDNActiveIPs {
+						metrics.FQDNActiveIPs.WithLabelValues(epID).Set(float64(countIPs))
+					}
+				}
 				namesToClean = append(namesToClean, ep.DNSHistory.GC(GCStart, ep.DNSZombies)...)
 				alive, dead := ep.DNSZombies.GC()
+				if option.Config.MetricsConfig.FQDNActiveZombiesConnections {
+					metrics.FQDNAliveZombieConnections.WithLabelValues(epID).Set(float64(len(alive)))
+				}
 
 				// Alive zombie need to be added to the global cache as name->IP
 				// entries.
@@ -340,7 +355,7 @@ func (d *Daemon) bootstrapFQDN(possibleEndpoints map[uint16]*endpoint.Endpoint, 
 	}
 	proxy.DefaultDNSProxy, err = dnsproxy.StartDNSProxy("", port, option.Config.ToFQDNsEnableDNSCompression,
 		option.Config.DNSMaxIPsPerRestoredRule, d.lookupEPByIP, d.LookupSecIDByIP, d.lookupIPsBySecID,
-		d.notifyOnDNSMsg)
+		d.notifyOnDNSMsg, option.Config.DNSProxyConcurrencyLimit)
 	if err == nil {
 		// Increase the ProxyPort reference count so that it will never get released.
 		err = d.l7Proxy.SetProxyPort(listenerName, proxy.DefaultDNSProxy.GetBindPort())
@@ -419,6 +434,10 @@ func (d *Daemon) notifyOnDNSMsg(lookupTime time.Time, ep *endpoint.Endpoint, epI
 			stat.UpstreamTime.Total().Seconds())
 		metrics.ProxyUpstreamTime.WithLabelValues(metricError, metrics.L7DNS, processingTime).Observe(
 			stat.ProcessingTime.Total().Seconds())
+		metrics.ProxyUpstreamTime.WithLabelValues(metricError, metrics.L7DNS, semaphoreTime).Observe(
+			stat.SemaphoreAcquireTime.Total().Seconds())
+		metrics.ProxyUpstreamTime.WithLabelValues(metricError, metrics.L7DNS, policyCheckTime).Observe(
+			stat.PolicyCheckTime.Total().Seconds())
 	}
 
 	switch {
@@ -587,6 +606,7 @@ func (d *Daemon) notifyOnDNSMsg(lookupTime time.Time, ep *endpoint.Endpoint, epI
 		select {
 		case <-updateCtx.Done():
 			log.Error("Timed out waiting for datapath updates of FQDN IP information; returning response")
+			metrics.ProxyDatapathUpdateTimeout.Inc()
 		case <-updateComplete:
 		}
 
