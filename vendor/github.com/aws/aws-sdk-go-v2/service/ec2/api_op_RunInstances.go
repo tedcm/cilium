@@ -73,7 +73,7 @@ func (c *Client) RunInstances(ctx context.Context, params *RunInstancesInput, op
 		params = &RunInstancesInput{}
 	}
 
-	result, metadata, err := c.invokeOperation(ctx, "RunInstances", params, optFns, addOperationRunInstancesMiddlewares)
+	result, metadata, err := c.invokeOperation(ctx, "RunInstances", params, optFns, c.addOperationRunInstancesMiddlewares)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +95,7 @@ type RunInstancesInput struct {
 	// the Amazon EC2 FAQ.
 	//
 	// This member is required.
-	MaxCount int32
+	MaxCount *int32
 
 	// The minimum number of instances to launch. If you specify a minimum that is more
 	// instances than Amazon EC2 can launch in the target Availability Zone, Amazon EC2
@@ -107,12 +107,16 @@ type RunInstancesInput struct {
 	// the Amazon EC2 General FAQ.
 	//
 	// This member is required.
-	MinCount int32
+	MinCount *int32
 
 	// Reserved.
 	AdditionalInfo *string
 
-	// The block device mapping entries.
+	// The block device mapping, which defines the EBS volumes and instance store
+	// volumes to attach to the instance at launch. For more information, see Block
+	// device mappings
+	// (https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/block-device-mapping-concepts.html)
+	// in the Amazon EC2 User Guide.
 	BlockDeviceMappings []types.BlockDeviceMapping
 
 	// Information about the Capacity Reservation targeting option. If you do not
@@ -129,8 +133,7 @@ type RunInstancesInput struct {
 	// Constraints: Maximum 64 ASCII characters
 	ClientToken *string
 
-	// The CPU options for the instance. For more information, see Optimizing CPU
-	// options
+	// The CPU options for the instance. For more information, see Optimize CPU options
 	// (https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-optimize-cpu.html)
 	// in the Amazon EC2 User Guide.
 	CpuOptions *types.CpuOptionsRequest
@@ -142,7 +145,8 @@ type RunInstancesInput struct {
 	// For more information, see Burstable performance instances
 	// (https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/burstable-performance-instances.html)
 	// in the Amazon EC2 User Guide. Default: standard (T2 instances) or unlimited
-	// (T3/T3a instances)
+	// (T3/T3a instances) For T3 instances with host tenancy, only standard is
+	// supported.
 	CreditSpecification *types.CreditSpecificationRequest
 
 	// If you set this parameter to true, you can't terminate the instance using the
@@ -152,20 +156,20 @@ type RunInstancesInput struct {
 	// Alternatively, if you set InstanceInitiatedShutdownBehavior to terminate, you
 	// can terminate the instance by running the shutdown command from the instance.
 	// Default: false
-	DisableApiTermination bool
+	DisableApiTermination *bool
 
 	// Checks whether you have the required permissions for the action, without
 	// actually making the request, and provides an error response. If you have the
 	// required permissions, the error response is DryRunOperation. Otherwise, it is
 	// UnauthorizedOperation.
-	DryRun bool
+	DryRun *bool
 
 	// Indicates whether the instance is optimized for Amazon EBS I/O. This
 	// optimization provides dedicated throughput to Amazon EBS and an optimized
 	// configuration stack to provide optimal Amazon EBS I/O performance. This
 	// optimization isn't available with all instance types. Additional usage charges
 	// apply when using an EBS-optimized instance. Default: false
-	EbsOptimized bool
+	EbsOptimized *bool
 
 	// An elastic GPU to associate with the instance. An Elastic GPU is a GPU resource
 	// that you can attach to your Windows instance to accelerate the graphics
@@ -181,18 +185,18 @@ type RunInstancesInput struct {
 	// specify accelerators from different generations in the same request.
 	ElasticInferenceAccelerators []types.ElasticInferenceAccelerator
 
-	// Indicates whether the instance is enabled for AWS Nitro Enclaves. For more
-	// information, see  What is AWS Nitro Enclaves?
-	// (https://docs.aws.amazon.com/enclaves/latest/user/nitro-enclave.html) in the AWS
-	// Nitro Enclaves User Guide. You can't enable AWS Nitro Enclaves and hibernation
-	// on the same instance.
+	// Indicates whether the instance is enabled for Amazon Web Services Nitro
+	// Enclaves. For more information, see  What is Amazon Web Services Nitro Enclaves?
+	// (https://docs.aws.amazon.com/enclaves/latest/user/nitro-enclave.html) in the
+	// Amazon Web Services Nitro Enclaves User Guide. You can't enable Amazon Web
+	// Services Nitro Enclaves and hibernation on the same instance.
 	EnclaveOptions *types.EnclaveOptionsRequest
 
 	// Indicates whether an instance is enabled for hibernation. For more information,
 	// see Hibernate your instance
 	// (https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Hibernate.html) in the
-	// Amazon EC2 User Guide. You can't enable hibernation and AWS Nitro Enclaves on
-	// the same instance.
+	// Amazon EC2 User Guide. You can't enable hibernation and Amazon Web Services
+	// Nitro Enclaves on the same instance.
 	HibernationOptions *types.HibernationOptionsRequest
 
 	// The name or Amazon Resource Name (ARN) of an IAM instance profile.
@@ -223,7 +227,7 @@ type RunInstancesInput struct {
 	// in the same request. You can specify this option if you've specified a minimum
 	// number of instances to launch. You cannot specify this option and the network
 	// interfaces option in the same request.
-	Ipv6AddressCount int32
+	Ipv6AddressCount *int32
 
 	// [EC2-VPC] The IPv6 addresses from the range of the subnet to associate with the
 	// primary network interface. You cannot specify this option and the option to
@@ -233,7 +237,7 @@ type RunInstancesInput struct {
 	Ipv6Addresses []types.InstanceIpv6Address
 
 	// The ID of the kernel. We recommend that you use PV-GRUB instead of kernels and
-	// RAM disks. For more information, see  PV-GRUB
+	// RAM disks. For more information, see PV-GRUB
 	// (https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/UserProvidedkernels.html)
 	// in the Amazon EC2 User Guide.
 	KernelId *string
@@ -270,6 +274,10 @@ type RunInstancesInput struct {
 	// The placement for the instance.
 	Placement *types.Placement
 
+	// The options for the instance hostname. The default values are inherited from the
+	// subnet.
+	PrivateDnsNameOptions *types.PrivateDnsNameOptionsRequest
+
 	// [EC2-VPC] The primary IPv4 address. You must specify a value from the IPv4
 	// address range of the subnet. Only one private IP address can be designated as
 	// primary. You can't specify this option if you've specified the option to
@@ -281,9 +289,9 @@ type RunInstancesInput struct {
 
 	// The ID of the RAM disk to select. Some kernels require additional drivers at
 	// launch. Check the kernel requirements for information about whether you need to
-	// specify a RAM disk. To find kernel requirements, go to the AWS Resource Center
-	// and search for the kernel ID. We recommend that you use PV-GRUB instead of
-	// kernels and RAM disks. For more information, see  PV-GRUB
+	// specify a RAM disk. To find kernel requirements, go to the Amazon Web Services
+	// Resource Center and search for the kernel ID. We recommend that you use PV-GRUB
+	// instead of kernels and RAM disks. For more information, see PV-GRUB
 	// (https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/UserProvidedkernels.html)
 	// in the Amazon EC2 User Guide.
 	RamdiskId *string
@@ -313,15 +321,17 @@ type RunInstancesInput struct {
 	// (https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_CreateTags.html).
 	TagSpecifications []types.TagSpecification
 
-	// The user data to make available to the instance. For more information, see
-	// Running commands on your Linux instance at launch
-	// (https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html) (Linux) and
-	// Adding User Data
-	// (https://docs.aws.amazon.com/AWSEC2/latest/WindowsGuide/ec2-instance-metadata.html#instancedata-add-user-data)
-	// (Windows). If you are using a command line tool, base64-encoding is performed
-	// for you, and you can load the text from a file. Otherwise, you must provide
-	// base64-encoded text. User data is limited to 16 KB.
+	// The user data to make available to the instance. For more information, see Run
+	// commands on your Linux instance at launch
+	// (https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html) and Run
+	// commands on your Windows instance at launch
+	// (https://docs.aws.amazon.com/AWSEC2/latest/WindowsGuide/ec2-windows-user-data.html).
+	// If you are using a command line tool, base64-encoding is performed for you, and
+	// you can load the text from a file. Otherwise, you must provide base64-encoded
+	// text. User data is limited to 16 KB.
 	UserData *string
+
+	noSmithyDocumentSerde
 }
 
 // Describes a launch request for one or more instances, and includes owner,
@@ -335,11 +345,11 @@ type RunInstancesOutput struct {
 	// The instances.
 	Instances []types.Instance
 
-	// The ID of the AWS account that owns the reservation.
+	// The ID of the Amazon Web Services account that owns the reservation.
 	OwnerId *string
 
 	// The ID of the requester that launched the instances on your behalf (for example,
-	// AWS Management Console or Auto Scaling).
+	// Amazon Web Services Management Console or Auto Scaling).
 	RequesterId *string
 
 	// The ID of the reservation.
@@ -347,9 +357,11 @@ type RunInstancesOutput struct {
 
 	// Metadata pertaining to the operation's result.
 	ResultMetadata middleware.Metadata
+
+	noSmithyDocumentSerde
 }
 
-func addOperationRunInstancesMiddlewares(stack *middleware.Stack, options Options) (err error) {
+func (c *Client) addOperationRunInstancesMiddlewares(stack *middleware.Stack, options Options) (err error) {
 	err = stack.Serialize.Add(&awsEc2query_serializeOpRunInstances{}, middleware.After)
 	if err != nil {
 		return err

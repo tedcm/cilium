@@ -13,13 +13,14 @@ import (
 )
 
 // Describes one or more of your Capacity Reservations. The results describe only
-// the Capacity Reservations in the AWS Region that you're currently using.
+// the Capacity Reservations in the Amazon Web Services Region that you're
+// currently using.
 func (c *Client) DescribeCapacityReservations(ctx context.Context, params *DescribeCapacityReservationsInput, optFns ...func(*Options)) (*DescribeCapacityReservationsOutput, error) {
 	if params == nil {
 		params = &DescribeCapacityReservationsInput{}
 	}
 
-	result, metadata, err := c.invokeOperation(ctx, "DescribeCapacityReservations", params, optFns, addOperationDescribeCapacityReservationsMiddlewares)
+	result, metadata, err := c.invokeOperation(ctx, "DescribeCapacityReservations", params, optFns, c.addOperationDescribeCapacityReservationsMiddlewares)
 	if err != nil {
 		return nil, err
 	}
@@ -38,42 +39,43 @@ type DescribeCapacityReservationsInput struct {
 	// actually making the request, and provides an error response. If you have the
 	// required permissions, the error response is DryRunOperation. Otherwise, it is
 	// UnauthorizedOperation.
-	DryRun bool
+	DryRun *bool
 
 	// One or more filters.
 	//
 	// * instance-type - The type of instance for which the
 	// Capacity Reservation reserves capacity.
 	//
-	// * owner-id - The ID of the AWS account
-	// that owns the Capacity Reservation.
+	// * owner-id - The ID of the Amazon Web
+	// Services account that owns the Capacity Reservation.
 	//
-	// * availability-zone-id - The Availability
-	// Zone ID of the Capacity Reservation.
+	// * instance-platform - The
+	// type of operating system for which the Capacity Reservation reserves
+	// capacity.
 	//
-	// * instance-platform - The type of
-	// operating system for which the Capacity Reservation reserves capacity.
+	// * availability-zone - The Availability Zone of the Capacity
+	// Reservation.
 	//
-	// *
-	// availability-zone - The Availability Zone ID of the Capacity Reservation.
+	// * tenancy - Indicates the tenancy of the Capacity Reservation. A
+	// Capacity Reservation can have one of the following tenancy settings:
 	//
-	// *
-	// tenancy - Indicates the tenancy of the Capacity Reservation. A Capacity
-	// Reservation can have one of the following tenancy settings:
+	// * default
+	// - The Capacity Reservation is created on hardware that is shared with other
+	// Amazon Web Services accounts.
 	//
-	// * default - The
-	// Capacity Reservation is created on hardware that is shared with other AWS
-	// accounts.
+	// * dedicated - The Capacity Reservation is created
+	// on single-tenant hardware that is dedicated to a single Amazon Web Services
+	// account.
 	//
-	// * dedicated - The Capacity Reservation is created on single-tenant
-	// hardware that is dedicated to a single AWS account.
+	// * outpost-arn - The Amazon Resource Name (ARN) of the Outpost on which
+	// the Capacity Reservation was created.
 	//
-	// * state - The current state
-	// of the Capacity Reservation. A Capacity Reservation can be in one of the
-	// following states:
+	// * state - The current state of the
+	// Capacity Reservation. A Capacity Reservation can be in one of the following
+	// states:
 	//
-	// * active- The Capacity Reservation is active and the capacity
-	// is available for your use.
+	// * active- The Capacity Reservation is active and the capacity is
+	// available for your use.
 	//
 	// * expired - The Capacity Reservation expired
 	// automatically at the date and time specified in your request. The reserved
@@ -123,16 +125,21 @@ type DescribeCapacityReservationsInput struct {
 	// have matching attributes (instance type, platform, and Availability Zone), and
 	// explicitly target the Capacity Reservation. This ensures that only permitted
 	// instances can use the reserved capacity.
+	//
+	// * placement-group-arn - The ARN of the
+	// cluster placement group in which the Capacity Reservation was created.
 	Filters []types.Filter
 
 	// The maximum number of results to return for the request in a single page. The
 	// remaining results can be seen by sending another request with the returned
 	// nextToken value. This value can be between 5 and 500. If maxResults is given a
 	// larger value than 500, you receive an error.
-	MaxResults int32
+	MaxResults *int32
 
 	// The token to use to retrieve the next page of results.
 	NextToken *string
+
+	noSmithyDocumentSerde
 }
 
 type DescribeCapacityReservationsOutput struct {
@@ -146,9 +153,11 @@ type DescribeCapacityReservationsOutput struct {
 
 	// Metadata pertaining to the operation's result.
 	ResultMetadata middleware.Metadata
+
+	noSmithyDocumentSerde
 }
 
-func addOperationDescribeCapacityReservationsMiddlewares(stack *middleware.Stack, options Options) (err error) {
+func (c *Client) addOperationDescribeCapacityReservationsMiddlewares(stack *middleware.Stack, options Options) (err error) {
 	err = stack.Serialize.Add(&awsEc2query_serializeOpDescribeCapacityReservations{}, middleware.After)
 	if err != nil {
 		return err
@@ -248,8 +257,8 @@ func NewDescribeCapacityReservationsPaginator(client DescribeCapacityReservation
 	}
 
 	options := DescribeCapacityReservationsPaginatorOptions{}
-	if params.MaxResults != 0 {
-		options.Limit = params.MaxResults
+	if params.MaxResults != nil {
+		options.Limit = *params.MaxResults
 	}
 
 	for _, fn := range optFns {
@@ -261,12 +270,13 @@ func NewDescribeCapacityReservationsPaginator(client DescribeCapacityReservation
 		client:    client,
 		params:    params,
 		firstPage: true,
+		nextToken: params.NextToken,
 	}
 }
 
 // HasMorePages returns a boolean indicating whether more pages are available
 func (p *DescribeCapacityReservationsPaginator) HasMorePages() bool {
-	return p.firstPage || p.nextToken != nil
+	return p.firstPage || (p.nextToken != nil && len(*p.nextToken) != 0)
 }
 
 // NextPage retrieves the next DescribeCapacityReservations page.
@@ -278,7 +288,11 @@ func (p *DescribeCapacityReservationsPaginator) NextPage(ctx context.Context, op
 	params := *p.params
 	params.NextToken = p.nextToken
 
-	params.MaxResults = p.options.Limit
+	var limit *int32
+	if p.options.Limit > 0 {
+		limit = &p.options.Limit
+	}
+	params.MaxResults = limit
 
 	result, err := p.client.DescribeCapacityReservations(ctx, &params, optFns...)
 	if err != nil {
@@ -289,7 +303,10 @@ func (p *DescribeCapacityReservationsPaginator) NextPage(ctx context.Context, op
 	prevToken := p.nextToken
 	p.nextToken = result.NextToken
 
-	if p.options.StopOnDuplicateToken && prevToken != nil && p.nextToken != nil && *prevToken == *p.nextToken {
+	if p.options.StopOnDuplicateToken &&
+		prevToken != nil &&
+		p.nextToken != nil &&
+		*prevToken == *p.nextToken {
 		p.nextToken = nil
 	}
 

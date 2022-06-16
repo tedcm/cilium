@@ -167,6 +167,7 @@ autoMount
 autoProtectPortRange
 awk
 aws
+awsEnablePrefixDelegation
 awsReleaseExcessIPs
 backend
 backends

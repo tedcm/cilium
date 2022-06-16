@@ -13,16 +13,17 @@ import (
 // Modifies the permissions for your VPC endpoint service
 // (https://docs.aws.amazon.com/vpc/latest/userguide/endpoint-service.html). You
 // can add or remove permissions for service consumers (IAM users, IAM roles, and
-// AWS accounts) to connect to your endpoint service. If you grant permissions to
-// all principals, the service is public. Any users who know the name of a public
-// service can send a request to attach an endpoint. If the service does not
-// require manual approval, attachments are automatically approved.
+// Amazon Web Services accounts) to connect to your endpoint service. If you grant
+// permissions to all principals, the service is public. Any users who know the
+// name of a public service can send a request to attach an endpoint. If the
+// service does not require manual approval, attachments are automatically
+// approved.
 func (c *Client) ModifyVpcEndpointServicePermissions(ctx context.Context, params *ModifyVpcEndpointServicePermissionsInput, optFns ...func(*Options)) (*ModifyVpcEndpointServicePermissionsOutput, error) {
 	if params == nil {
 		params = &ModifyVpcEndpointServicePermissionsInput{}
 	}
 
-	result, metadata, err := c.invokeOperation(ctx, "ModifyVpcEndpointServicePermissions", params, optFns, addOperationModifyVpcEndpointServicePermissionsMiddlewares)
+	result, metadata, err := c.invokeOperation(ctx, "ModifyVpcEndpointServicePermissions", params, optFns, c.addOperationModifyVpcEndpointServicePermissionsMiddlewares)
 	if err != nil {
 		return nil, err
 	}
@@ -48,23 +49,27 @@ type ModifyVpcEndpointServicePermissionsInput struct {
 	// actually making the request, and provides an error response. If you have the
 	// required permissions, the error response is DryRunOperation. Otherwise, it is
 	// UnauthorizedOperation.
-	DryRun bool
+	DryRun *bool
 
 	// The Amazon Resource Names (ARN) of one or more principals. Permissions are
 	// revoked for principals in this list.
 	RemoveAllowedPrincipals []string
+
+	noSmithyDocumentSerde
 }
 
 type ModifyVpcEndpointServicePermissionsOutput struct {
 
 	// Returns true if the request succeeds; otherwise, it returns an error.
-	ReturnValue bool
+	ReturnValue *bool
 
 	// Metadata pertaining to the operation's result.
 	ResultMetadata middleware.Metadata
+
+	noSmithyDocumentSerde
 }
 
-func addOperationModifyVpcEndpointServicePermissionsMiddlewares(stack *middleware.Stack, options Options) (err error) {
+func (c *Client) addOperationModifyVpcEndpointServicePermissionsMiddlewares(stack *middleware.Stack, options Options) (err error) {
 	err = stack.Serialize.Add(&awsEc2query_serializeOpModifyVpcEndpointServicePermissions{}, middleware.After)
 	if err != nil {
 		return err

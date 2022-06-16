@@ -13,15 +13,15 @@ import (
 )
 
 // Describes the specified EC2 Fleets or all of your EC2 Fleets. For more
-// information, see Monitoring your EC2 Fleet
-// (https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-fleet.html#monitor-ec2-fleet)
+// information, see Monitor your EC2 Fleet
+// (https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/manage-ec2-fleet.html#monitor-ec2-fleet)
 // in the Amazon EC2 User Guide.
 func (c *Client) DescribeFleets(ctx context.Context, params *DescribeFleetsInput, optFns ...func(*Options)) (*DescribeFleetsOutput, error) {
 	if params == nil {
 		params = &DescribeFleetsInput{}
 	}
 
-	result, metadata, err := c.invokeOperation(ctx, "DescribeFleets", params, optFns, addOperationDescribeFleetsMiddlewares)
+	result, metadata, err := c.invokeOperation(ctx, "DescribeFleets", params, optFns, c.addOperationDescribeFleetsMiddlewares)
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +37,7 @@ type DescribeFleetsInput struct {
 	// actually making the request, and provides an error response. If you have the
 	// required permissions, the error response is DryRunOperation. Otherwise, it is
 	// UnauthorizedOperation.
-	DryRun bool
+	DryRun *bool
 
 	// The filters.
 	//
@@ -60,16 +60,19 @@ type DescribeFleetsInput struct {
 	// request | maintain).
 	Filters []types.Filter
 
-	// The ID of the EC2 Fleets.
+	// The IDs of the EC2 Fleets. If a fleet is of type instant, you must specify the
+	// fleet ID, otherwise it does not appear in the response.
 	FleetIds []string
 
 	// The maximum number of results to return in a single call. Specify a value
 	// between 1 and 1000. The default value is 1000. To retrieve the remaining
 	// results, make another call with the returned NextToken value.
-	MaxResults int32
+	MaxResults *int32
 
 	// The token for the next set of results.
 	NextToken *string
+
+	noSmithyDocumentSerde
 }
 
 type DescribeFleetsOutput struct {
@@ -82,9 +85,11 @@ type DescribeFleetsOutput struct {
 
 	// Metadata pertaining to the operation's result.
 	ResultMetadata middleware.Metadata
+
+	noSmithyDocumentSerde
 }
 
-func addOperationDescribeFleetsMiddlewares(stack *middleware.Stack, options Options) (err error) {
+func (c *Client) addOperationDescribeFleetsMiddlewares(stack *middleware.Stack, options Options) (err error) {
 	err = stack.Serialize.Add(&awsEc2query_serializeOpDescribeFleets{}, middleware.After)
 	if err != nil {
 		return err
@@ -180,8 +185,8 @@ func NewDescribeFleetsPaginator(client DescribeFleetsAPIClient, params *Describe
 	}
 
 	options := DescribeFleetsPaginatorOptions{}
-	if params.MaxResults != 0 {
-		options.Limit = params.MaxResults
+	if params.MaxResults != nil {
+		options.Limit = *params.MaxResults
 	}
 
 	for _, fn := range optFns {
@@ -193,12 +198,13 @@ func NewDescribeFleetsPaginator(client DescribeFleetsAPIClient, params *Describe
 		client:    client,
 		params:    params,
 		firstPage: true,
+		nextToken: params.NextToken,
 	}
 }
 
 // HasMorePages returns a boolean indicating whether more pages are available
 func (p *DescribeFleetsPaginator) HasMorePages() bool {
-	return p.firstPage || p.nextToken != nil
+	return p.firstPage || (p.nextToken != nil && len(*p.nextToken) != 0)
 }
 
 // NextPage retrieves the next DescribeFleets page.
@@ -210,7 +216,11 @@ func (p *DescribeFleetsPaginator) NextPage(ctx context.Context, optFns ...func(*
 	params := *p.params
 	params.NextToken = p.nextToken
 
-	params.MaxResults = p.options.Limit
+	var limit *int32
+	if p.options.Limit > 0 {
+		limit = &p.options.Limit
+	}
+	params.MaxResults = limit
 
 	result, err := p.client.DescribeFleets(ctx, &params, optFns...)
 	if err != nil {
@@ -221,7 +231,10 @@ func (p *DescribeFleetsPaginator) NextPage(ctx context.Context, optFns ...func(*
 	prevToken := p.nextToken
 	p.nextToken = result.NextToken
 
-	if p.options.StopOnDuplicateToken && prevToken != nil && p.nextToken != nil && *prevToken == *p.nextToken {
+	if p.options.StopOnDuplicateToken &&
+		prevToken != nil &&
+		p.nextToken != nil &&
+		*prevToken == *p.nextToken {
 		p.nextToken = nil
 	}
 

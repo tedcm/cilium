@@ -18,7 +18,7 @@ func (c *Client) DescribeLocalGatewayVirtualInterfaceGroups(ctx context.Context,
 		params = &DescribeLocalGatewayVirtualInterfaceGroupsInput{}
 	}
 
-	result, metadata, err := c.invokeOperation(ctx, "DescribeLocalGatewayVirtualInterfaceGroups", params, optFns, addOperationDescribeLocalGatewayVirtualInterfaceGroupsMiddlewares)
+	result, metadata, err := c.invokeOperation(ctx, "DescribeLocalGatewayVirtualInterfaceGroups", params, optFns, c.addOperationDescribeLocalGatewayVirtualInterfaceGroupsMiddlewares)
 	if err != nil {
 		return nil, err
 	}
@@ -34,18 +34,21 @@ type DescribeLocalGatewayVirtualInterfaceGroupsInput struct {
 	// actually making the request, and provides an error response. If you have the
 	// required permissions, the error response is DryRunOperation. Otherwise, it is
 	// UnauthorizedOperation.
-	DryRun bool
+	DryRun *bool
 
 	// One or more filters.
 	//
 	// * local-gateway-id - The ID of a local gateway.
 	//
 	// *
-	// local-gateway-virtual-interface-id - The ID of the virtual interface.
-	//
-	// *
 	// local-gateway-virtual-interface-group-id - The ID of the virtual interface
 	// group.
+	//
+	// * local-gateway-virtual-interface-id - The ID of the virtual
+	// interface.
+	//
+	// * owner-id - The ID of the Amazon Web Services account that owns the
+	// local gateway virtual interface group.
 	Filters []types.Filter
 
 	// The IDs of the virtual interface groups.
@@ -53,10 +56,12 @@ type DescribeLocalGatewayVirtualInterfaceGroupsInput struct {
 
 	// The maximum number of results to return with a single call. To retrieve the
 	// remaining results, make another call with the returned nextToken value.
-	MaxResults int32
+	MaxResults *int32
 
 	// The token for the next page of results.
 	NextToken *string
+
+	noSmithyDocumentSerde
 }
 
 type DescribeLocalGatewayVirtualInterfaceGroupsOutput struct {
@@ -70,9 +75,11 @@ type DescribeLocalGatewayVirtualInterfaceGroupsOutput struct {
 
 	// Metadata pertaining to the operation's result.
 	ResultMetadata middleware.Metadata
+
+	noSmithyDocumentSerde
 }
 
-func addOperationDescribeLocalGatewayVirtualInterfaceGroupsMiddlewares(stack *middleware.Stack, options Options) (err error) {
+func (c *Client) addOperationDescribeLocalGatewayVirtualInterfaceGroupsMiddlewares(stack *middleware.Stack, options Options) (err error) {
 	err = stack.Serialize.Add(&awsEc2query_serializeOpDescribeLocalGatewayVirtualInterfaceGroups{}, middleware.After)
 	if err != nil {
 		return err
@@ -170,8 +177,8 @@ func NewDescribeLocalGatewayVirtualInterfaceGroupsPaginator(client DescribeLocal
 	}
 
 	options := DescribeLocalGatewayVirtualInterfaceGroupsPaginatorOptions{}
-	if params.MaxResults != 0 {
-		options.Limit = params.MaxResults
+	if params.MaxResults != nil {
+		options.Limit = *params.MaxResults
 	}
 
 	for _, fn := range optFns {
@@ -183,12 +190,13 @@ func NewDescribeLocalGatewayVirtualInterfaceGroupsPaginator(client DescribeLocal
 		client:    client,
 		params:    params,
 		firstPage: true,
+		nextToken: params.NextToken,
 	}
 }
 
 // HasMorePages returns a boolean indicating whether more pages are available
 func (p *DescribeLocalGatewayVirtualInterfaceGroupsPaginator) HasMorePages() bool {
-	return p.firstPage || p.nextToken != nil
+	return p.firstPage || (p.nextToken != nil && len(*p.nextToken) != 0)
 }
 
 // NextPage retrieves the next DescribeLocalGatewayVirtualInterfaceGroups page.
@@ -200,7 +208,11 @@ func (p *DescribeLocalGatewayVirtualInterfaceGroupsPaginator) NextPage(ctx conte
 	params := *p.params
 	params.NextToken = p.nextToken
 
-	params.MaxResults = p.options.Limit
+	var limit *int32
+	if p.options.Limit > 0 {
+		limit = &p.options.Limit
+	}
+	params.MaxResults = limit
 
 	result, err := p.client.DescribeLocalGatewayVirtualInterfaceGroups(ctx, &params, optFns...)
 	if err != nil {
@@ -211,7 +223,10 @@ func (p *DescribeLocalGatewayVirtualInterfaceGroupsPaginator) NextPage(ctx conte
 	prevToken := p.nextToken
 	p.nextToken = result.NextToken
 
-	if p.options.StopOnDuplicateToken && prevToken != nil && p.nextToken != nil && *prevToken == *p.nextToken {
+	if p.options.StopOnDuplicateToken &&
+		prevToken != nil &&
+		p.nextToken != nil &&
+		*prevToken == *p.nextToken {
 		p.nextToken = nil
 	}
 

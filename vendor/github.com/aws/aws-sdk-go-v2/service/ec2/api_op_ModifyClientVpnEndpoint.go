@@ -18,7 +18,7 @@ func (c *Client) ModifyClientVpnEndpoint(ctx context.Context, params *ModifyClie
 		params = &ModifyClientVpnEndpointInput{}
 	}
 
-	result, metadata, err := c.invokeOperation(ctx, "ModifyClientVpnEndpoint", params, optFns, addOperationModifyClientVpnEndpointMiddlewares)
+	result, metadata, err := c.invokeOperation(ctx, "ModifyClientVpnEndpoint", params, optFns, c.addOperationModifyClientVpnEndpointMiddlewares)
 	if err != nil {
 		return nil, err
 	}
@@ -37,6 +37,10 @@ type ModifyClientVpnEndpointInput struct {
 
 	// The options for managing connection authorization for new client connections.
 	ClientConnectOptions *types.ClientConnectOptions
+
+	// Options for enabling a customizable text banner that will be displayed on Amazon
+	// Web Services provided clients when a VPN session is established.
+	ClientLoginBannerOptions *types.ClientLoginBannerOptions
 
 	// Information about the client connection logging options. If you enable client
 	// connection logging, data about client connections is sent to a Cloudwatch Logs
@@ -65,7 +69,7 @@ type ModifyClientVpnEndpointInput struct {
 	// actually making the request, and provides an error response. If you have the
 	// required permissions, the error response is DryRunOperation. Otherwise, it is
 	// UnauthorizedOperation.
-	DryRun bool
+	DryRun *bool
 
 	// The IDs of one or more security groups to apply to the target network.
 	SecurityGroupIds []string
@@ -74,33 +78,41 @@ type ModifyClientVpnEndpointInput struct {
 	SelfServicePortal types.SelfServicePortal
 
 	// The ARN of the server certificate to be used. The server certificate must be
-	// provisioned in AWS Certificate Manager (ACM).
+	// provisioned in Certificate Manager (ACM).
 	ServerCertificateArn *string
 
+	// The maximum VPN session duration time in hours. Valid values: 8 | 10 | 12 | 24
+	// Default value: 24
+	SessionTimeoutHours *int32
+
 	// Indicates whether the VPN is split-tunnel. For information about split-tunnel
-	// VPN endpoints, see Split-Tunnel AWS Client VPN Endpoint
+	// VPN endpoints, see Split-tunnel Client VPN endpoint
 	// (https://docs.aws.amazon.com/vpn/latest/clientvpn-admin/split-tunnel-vpn.html)
-	// in the AWS Client VPN Administrator Guide.
-	SplitTunnel bool
+	// in the Client VPN Administrator Guide.
+	SplitTunnel *bool
 
 	// The ID of the VPC to associate with the Client VPN endpoint.
 	VpcId *string
 
 	// The port number to assign to the Client VPN endpoint for TCP and UDP traffic.
 	// Valid Values: 443 | 1194 Default Value: 443
-	VpnPort int32
+	VpnPort *int32
+
+	noSmithyDocumentSerde
 }
 
 type ModifyClientVpnEndpointOutput struct {
 
 	// Returns true if the request succeeds; otherwise, it returns an error.
-	Return bool
+	Return *bool
 
 	// Metadata pertaining to the operation's result.
 	ResultMetadata middleware.Metadata
+
+	noSmithyDocumentSerde
 }
 
-func addOperationModifyClientVpnEndpointMiddlewares(stack *middleware.Stack, options Options) (err error) {
+func (c *Client) addOperationModifyClientVpnEndpointMiddlewares(stack *middleware.Stack, options Options) (err error) {
 	err = stack.Serialize.Add(&awsEc2query_serializeOpModifyClientVpnEndpoint{}, middleware.After)
 	if err != nil {
 		return err

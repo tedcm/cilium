@@ -18,7 +18,7 @@ func (c *Client) DescribeTransitGatewayConnectPeers(ctx context.Context, params 
 		params = &DescribeTransitGatewayConnectPeersInput{}
 	}
 
-	result, metadata, err := c.invokeOperation(ctx, "DescribeTransitGatewayConnectPeers", params, optFns, addOperationDescribeTransitGatewayConnectPeersMiddlewares)
+	result, metadata, err := c.invokeOperation(ctx, "DescribeTransitGatewayConnectPeers", params, optFns, c.addOperationDescribeTransitGatewayConnectPeersMiddlewares)
 	if err != nil {
 		return nil, err
 	}
@@ -34,7 +34,7 @@ type DescribeTransitGatewayConnectPeersInput struct {
 	// actually making the request, and provides an error response. If you have the
 	// required permissions, the error response is DryRunOperation. Otherwise, it is
 	// UnauthorizedOperation.
-	DryRun bool
+	DryRun *bool
 
 	// One or more filters. The possible values are:
 	//
@@ -50,13 +50,15 @@ type DescribeTransitGatewayConnectPeersInput struct {
 
 	// The maximum number of results to return with a single call. To retrieve the
 	// remaining results, make another call with the returned nextToken value.
-	MaxResults int32
+	MaxResults *int32
 
 	// The token for the next page of results.
 	NextToken *string
 
 	// The IDs of the Connect peers.
 	TransitGatewayConnectPeerIds []string
+
+	noSmithyDocumentSerde
 }
 
 type DescribeTransitGatewayConnectPeersOutput struct {
@@ -70,9 +72,11 @@ type DescribeTransitGatewayConnectPeersOutput struct {
 
 	// Metadata pertaining to the operation's result.
 	ResultMetadata middleware.Metadata
+
+	noSmithyDocumentSerde
 }
 
-func addOperationDescribeTransitGatewayConnectPeersMiddlewares(stack *middleware.Stack, options Options) (err error) {
+func (c *Client) addOperationDescribeTransitGatewayConnectPeersMiddlewares(stack *middleware.Stack, options Options) (err error) {
 	err = stack.Serialize.Add(&awsEc2query_serializeOpDescribeTransitGatewayConnectPeers{}, middleware.After)
 	if err != nil {
 		return err
@@ -170,8 +174,8 @@ func NewDescribeTransitGatewayConnectPeersPaginator(client DescribeTransitGatewa
 	}
 
 	options := DescribeTransitGatewayConnectPeersPaginatorOptions{}
-	if params.MaxResults != 0 {
-		options.Limit = params.MaxResults
+	if params.MaxResults != nil {
+		options.Limit = *params.MaxResults
 	}
 
 	for _, fn := range optFns {
@@ -183,12 +187,13 @@ func NewDescribeTransitGatewayConnectPeersPaginator(client DescribeTransitGatewa
 		client:    client,
 		params:    params,
 		firstPage: true,
+		nextToken: params.NextToken,
 	}
 }
 
 // HasMorePages returns a boolean indicating whether more pages are available
 func (p *DescribeTransitGatewayConnectPeersPaginator) HasMorePages() bool {
-	return p.firstPage || p.nextToken != nil
+	return p.firstPage || (p.nextToken != nil && len(*p.nextToken) != 0)
 }
 
 // NextPage retrieves the next DescribeTransitGatewayConnectPeers page.
@@ -200,7 +205,11 @@ func (p *DescribeTransitGatewayConnectPeersPaginator) NextPage(ctx context.Conte
 	params := *p.params
 	params.NextToken = p.nextToken
 
-	params.MaxResults = p.options.Limit
+	var limit *int32
+	if p.options.Limit > 0 {
+		limit = &p.options.Limit
+	}
+	params.MaxResults = limit
 
 	result, err := p.client.DescribeTransitGatewayConnectPeers(ctx, &params, optFns...)
 	if err != nil {
@@ -211,7 +220,10 @@ func (p *DescribeTransitGatewayConnectPeersPaginator) NextPage(ctx context.Conte
 	prevToken := p.nextToken
 	p.nextToken = result.NextToken
 
-	if p.options.StopOnDuplicateToken && prevToken != nil && p.nextToken != nil && *prevToken == *p.nextToken {
+	if p.options.StopOnDuplicateToken &&
+		prevToken != nil &&
+		p.nextToken != nil &&
+		*prevToken == *p.nextToken {
 		p.nextToken = nil
 	}
 

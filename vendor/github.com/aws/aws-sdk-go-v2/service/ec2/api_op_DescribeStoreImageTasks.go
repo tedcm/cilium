@@ -19,10 +19,10 @@ import (
 // shows the estimated progress as a percentage. Tasks are listed in reverse
 // chronological order. Currently, only tasks from the past 31 days can be viewed.
 // To use this API, you must have the required permissions. For more information,
-// see Permissions for storing and restoring AMIs using S3
+// see Permissions for storing and restoring AMIs using Amazon S3
 // (https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ami-store-restore.html#ami-s3-permissions)
 // in the Amazon Elastic Compute Cloud User Guide. For more information, see Store
-// and restore an AMI using S3
+// and restore an AMI using Amazon S3
 // (https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ami-store-restore.html) in
 // the Amazon Elastic Compute Cloud User Guide.
 func (c *Client) DescribeStoreImageTasks(ctx context.Context, params *DescribeStoreImageTasksInput, optFns ...func(*Options)) (*DescribeStoreImageTasksOutput, error) {
@@ -30,7 +30,7 @@ func (c *Client) DescribeStoreImageTasks(ctx context.Context, params *DescribeSt
 		params = &DescribeStoreImageTasksInput{}
 	}
 
-	result, metadata, err := c.invokeOperation(ctx, "DescribeStoreImageTasks", params, optFns, addOperationDescribeStoreImageTasksMiddlewares)
+	result, metadata, err := c.invokeOperation(ctx, "DescribeStoreImageTasks", params, optFns, c.addOperationDescribeStoreImageTasksMiddlewares)
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +46,7 @@ type DescribeStoreImageTasksInput struct {
 	// actually making the request, and provides an error response. If you have the
 	// required permissions, the error response is DryRunOperation. Otherwise, it is
 	// UnauthorizedOperation.
-	DryRun bool
+	DryRun *bool
 
 	// The filters.
 	//
@@ -65,10 +65,12 @@ type DescribeStoreImageTasksInput struct {
 	// remaining results, make another call with the returned NextToken value. This
 	// value can be between 1 and 200. You cannot specify this parameter and the
 	// ImageIDs parameter in the same call.
-	MaxResults int32
+	MaxResults *int32
 
 	// The token for the next page of results.
 	NextToken *string
+
+	noSmithyDocumentSerde
 }
 
 type DescribeStoreImageTasksOutput struct {
@@ -82,9 +84,11 @@ type DescribeStoreImageTasksOutput struct {
 
 	// Metadata pertaining to the operation's result.
 	ResultMetadata middleware.Metadata
+
+	noSmithyDocumentSerde
 }
 
-func addOperationDescribeStoreImageTasksMiddlewares(stack *middleware.Stack, options Options) (err error) {
+func (c *Client) addOperationDescribeStoreImageTasksMiddlewares(stack *middleware.Stack, options Options) (err error) {
 	err = stack.Serialize.Add(&awsEc2query_serializeOpDescribeStoreImageTasks{}, middleware.After)
 	if err != nil {
 		return err
@@ -183,8 +187,8 @@ func NewDescribeStoreImageTasksPaginator(client DescribeStoreImageTasksAPIClient
 	}
 
 	options := DescribeStoreImageTasksPaginatorOptions{}
-	if params.MaxResults != 0 {
-		options.Limit = params.MaxResults
+	if params.MaxResults != nil {
+		options.Limit = *params.MaxResults
 	}
 
 	for _, fn := range optFns {
@@ -196,12 +200,13 @@ func NewDescribeStoreImageTasksPaginator(client DescribeStoreImageTasksAPIClient
 		client:    client,
 		params:    params,
 		firstPage: true,
+		nextToken: params.NextToken,
 	}
 }
 
 // HasMorePages returns a boolean indicating whether more pages are available
 func (p *DescribeStoreImageTasksPaginator) HasMorePages() bool {
-	return p.firstPage || p.nextToken != nil
+	return p.firstPage || (p.nextToken != nil && len(*p.nextToken) != 0)
 }
 
 // NextPage retrieves the next DescribeStoreImageTasks page.
@@ -213,7 +218,11 @@ func (p *DescribeStoreImageTasksPaginator) NextPage(ctx context.Context, optFns 
 	params := *p.params
 	params.NextToken = p.nextToken
 
-	params.MaxResults = p.options.Limit
+	var limit *int32
+	if p.options.Limit > 0 {
+		limit = &p.options.Limit
+	}
+	params.MaxResults = limit
 
 	result, err := p.client.DescribeStoreImageTasks(ctx, &params, optFns...)
 	if err != nil {
@@ -224,7 +233,10 @@ func (p *DescribeStoreImageTasksPaginator) NextPage(ctx context.Context, optFns 
 	prevToken := p.nextToken
 	p.nextToken = result.NextToken
 
-	if p.options.StopOnDuplicateToken && prevToken != nil && p.nextToken != nil && *prevToken == *p.nextToken {
+	if p.options.StopOnDuplicateToken &&
+		prevToken != nil &&
+		p.nextToken != nil &&
+		*prevToken == *p.nextToken {
 		p.nextToken = nil
 	}
 
