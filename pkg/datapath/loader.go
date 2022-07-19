@@ -55,22 +55,36 @@ type PreFilter interface {
 // Proxy is any type which installs rules related to redirecting traffic to
 // a proxy.
 type Proxy interface {
-	ReinstallRules()
+	ReinstallRules(ctx context.Context) error
 }
 
 // IptablesManager manages iptables rules.
 type IptablesManager interface {
 	// InstallProxyRules creates the necessary datapath config (e.g., iptables
 	// rules for redirecting host proxy traffic on a specific ProxyPort)
-	InstallProxyRules(proxyPort uint16, ingress bool, name string) error
+	InstallProxyRules(ctx context.Context, proxyPort uint16, ingress bool, name string) error
 
 	// SupportsOriginalSourceAddr tells if the datapath supports
 	// use of original source addresses in proxy upstream
 	// connections.
 	SupportsOriginalSourceAddr() bool
-	InstallRules(ifName string, quiet, install bool) error
+	InstallRules(ctx context.Context, ifName string, quiet, install bool) error
 
 	// GetProxyPort fetches the existing proxy port configured for the
 	// specified listener. Used early in bootstrap to reopen proxy ports.
 	GetProxyPort(listener string) uint16
+
+	// InstallNoTrackRules is explicitly called when a pod has valid
+	// "io.cilium.no-track-port" annotation.  When
+	// InstallNoConntrackIptRules flag is set, a super set of v4 NOTRACK
+	// rules will be automatically installed upon agent bootstrap (via
+	// function addNoTrackPodTrafficRules) and this function will be
+	// skipped.  When InstallNoConntrackIptRules is not set, this function
+	// will be executed to install NOTRACK rules.  The rules installed by
+	// this function is very specific, for now, the only user is
+	// node-local-dns pods.
+	InstallNoTrackRules(IP string, port uint16, ipv6 bool) error
+
+	// See comments for InstallNoTrackRules.
+	RemoveNoTrackRules(IP string, port uint16, ipv6 bool) error
 }

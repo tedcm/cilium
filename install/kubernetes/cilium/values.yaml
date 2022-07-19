@@ -83,10 +83,10 @@ rollOutCiliumPods: false
 image:
   override: ~
   repository: quay.io/cilium/cilium
-  tag: v1.10.12
+  tag: v1.10.13
   pullPolicy: IfNotPresent
   # cilium-digest
-  digest: "sha256:6a119c4f249d42df0d5654295ac9466da117f9b838ff48b4bc64234f7ab20b80"
+  digest: "sha256:6b9b2688d39841c862bb3ca8a45af18a1f9305054e9add833d91a1b187f7f16e"
   useDigest: true
 
 # -- Pod affinity for cilium-agent.
@@ -195,6 +195,12 @@ updateStrategy:
 
 # Configuration Values for cilium-agent
 
+aksbyocni:
+  # -- Enable AKS BYOCNI integration.
+  # Note that this is incompatible with AKS clusters not created in BYOCNI mode:
+  # use Azure integration (`azure.enabled`) instead.
+  enabled: false
+
 # -- Enable installation of PodCIDR routes between worker
 # nodes if worker nodes share a common L2 network segment.
 autoDirectNodeRoutes: false
@@ -203,7 +209,9 @@ autoDirectNodeRoutes: false
 annotateK8sNode: true
 
 azure:
-  # -- Enable Azure integration
+  # -- Enable Azure integration.
+  # Note that this is incompatible with AKS clusters created in BYOCNI mode: use
+  # AKS BYOCNI integration (`aksbyocni.enabled`) instead.
   enabled: false
   # resourceGroup: group1
   # subscriptionID: 00000000-0000-0000-0000-000000000000
@@ -613,7 +621,7 @@ hubble:
   peerService:
     # -- Enable a K8s Service for the Peer service, so that it can be accessed
     # by a non-local client
-    enabled: true
+    enabled: false
     # -- Service Port for the Peer service.
     # If not set, it is dynamically assigned to port 443 if TLS is enabled and to
     # port 80 if not.
@@ -676,9 +684,9 @@ hubble:
     image:
       override: ~
       repository: quay.io/cilium/hubble-relay
-      tag: v1.10.12
+      tag: v1.10.13
        # hubble-relay-digest
-      digest: "sha256:fd3829bf67f2f3d3471da6ded9c636b22feb9a31feaac4509a295043e93af169"
+      digest: "sha256:9110780d4220816500f8a1e6cb82434c6051d7d444069b2f065d7d5d89fa7010"
       useDigest: true
       pullPolicy: IfNotPresent
 
@@ -1238,15 +1246,15 @@ operator:
   image:
     override: ~
     repository: quay.io/cilium/operator
-    tag: v1.10.12
+    tag: v1.10.13
     # operator-generic-digest
-    genericDigest: "sha256:35288de36cd1b6fe65e55a9b878100c2ab92ac88ed6a3ab04326e00326cff3f7"
+    genericDigest: "sha256:4b65009815b835e79b4a9bce97d8da4ff81c59da7a514f60244e6dab9ac8548e"
     # operator-azure-digest
-    azureDigest: "sha256:7c920352c82cd10b402d14902f119d75e45f6faa103f2ea89f760cf5de5301f3"
+    azureDigest: "sha256:cb28936c07b746e4dbafad2ed98ca5c07556350a05330d3b44e05545021e4d26"
     # operator-aws-digest
-    awsDigest: "sha256:06b31f3d9baa2be911b90ab933bb8dc08a1bd5e3104f5e90b9cb51a9dd9142f6"
+    awsDigest: "sha256:cb925217da2d06faabac4ac8d1a778f51db9ad7e3f62f951c34814dab686995e"
     # operator-alibabacloud-digest
-    alibabacloudDigest: "sha256:72de09e0e7a17de8e61e03f251d698c68e2e8e1f1fa1ada67200920a6cad6d0a"
+    alibabacloudDigest: "sha256:e9b01ed28a9539e52dced97ae5f4a8fddfde394339a52e15ee7d9a9b428a92e3"
     useDigest: true
     pullPolicy: IfNotPresent
     suffix: ""
@@ -1484,9 +1492,9 @@ preflight:
   # -- Cilium pre-flight image.
   image:
     repository: quay.io/cilium/cilium
-    tag: v1.10.12
+    tag: v1.10.13
     # cilium-digest
-    digest: "sha256:6a119c4f249d42df0d5654295ac9466da117f9b838ff48b4bc64234f7ab20b80"
+    digest: "sha256:6b9b2688d39841c862bb3ca8a45af18a1f9305054e9add833d91a1b187f7f16e"
     useDigest: true
     pullPolicy: IfNotPresent
 
@@ -1623,9 +1631,9 @@ clustermesh:
     # -- Clustermesh API server image.
     image:
       repository: quay.io/cilium/clustermesh-apiserver
-      tag: v1.10.12
+      tag: v1.10.13
       # clustermesh-apiserver-digest
-      digest: "sha256:0dd9df6e4b20f7120f10ddee560e0c285875657f0db0e2a18bc0cd748f86a84c"
+      digest: "sha256:fe1f583b096563aa6106119bfafda771a2e4e2edd29db0055e28f18c71d81d97"
       useDigest: true
       pullPolicy: IfNotPresent
 

@@ -182,8 +182,11 @@ const (
 	// IPv6CIDRs is a list of IPv6 CIDRs
 	IPv6CIDRs = "ipv6CIDRs"
 
-	// CIDR is a IPv4/IPv4 subnet/CIDR
+	// CIDR is a IPv4/IPv6 subnet/CIDR
 	CIDR = "cidr"
+
+	// CIDRS is a list of IPv4/IPv6 CIDRs
+	CIDRS = "cidrs"
 
 	// IPAddrs is a lsit of IP addrs
 	IPAddrs = "ipAddrs"
@@ -570,4 +573,13 @@ const (
 
 	// GatewayIP is the gateway IP used in a given egress policy
 	GatewayIP = "gatewayIP"
+
+	// Chain is an Iptables chain
+	Chain = "chain"
+
+	// IPSec SPI
+	SPI = "spi"
+
+	// IPSec old SPI
+	OldSPI = "oldSPI"
 )

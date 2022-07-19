@@ -35,6 +35,7 @@ import (
 	"github.com/cilium/cilium/pkg/counter"
 	"github.com/cilium/cilium/pkg/crypto/certificatemanager"
 	"github.com/cilium/cilium/pkg/datapath"
+	"github.com/cilium/cilium/pkg/datapath/linux/ipsec"
 	"github.com/cilium/cilium/pkg/datapath/linux/probes"
 	linuxrouting "github.com/cilium/cilium/pkg/datapath/linux/routing"
 	"github.com/cilium/cilium/pkg/datapath/loader"
@@ -269,28 +270,32 @@ func createPrefixLengthCounter() *counter.PrefixLengthCounter {
 // that the most up-to-date information has been retrieved. At this point, the
 // daemon is aware of all the necessary information to restore the appropriate
 // IP.
-func restoreCiliumHostIPs(ipv6 bool, fromK8s net.IP) {
+func (d *Daemon) restoreCiliumHostIPs(ipv6 bool, fromK8s net.IP) {
 	var (
-		cidr   *cidr.CIDR
+		cidrs  []*cidr.CIDR
 		fromFS net.IP
 	)
 
 	if ipv6 {
-		cidr = node.GetIPv6AllocRange()
+		cidrs = []*cidr.CIDR{node.GetIPv6AllocRange()}
 		fromFS = node.GetIPv6Router()
 	} else {
 		switch option.Config.IPAMMode() {
-		case ipamOption.IPAMCRD, ipamOption.IPAMENI, ipamOption.IPAMAzure, ipamOption.IPAMAlibabaCloud:
-			// The native routing CIDR is the pod CIDR in these IPAM modes.
-			cidr = option.Config.IPv4NativeRoutingCIDR()
+		case ipamOption.IPAMCRD:
+			// The native routing CIDR is the pod CIDR in CRD mode.
+			cidrs = []*cidr.CIDR{option.Config.IPv4NativeRoutingCIDR()}
+		case ipamOption.IPAMENI, ipamOption.IPAMAzure, ipamOption.IPAMAlibabaCloud:
+			// d.startIPAM() has already been called at this stage to initialize sharedNodeStore with ownNode info
+			// needed for GetVpcCIDRs()
+			cidrs = d.ipam.GetVpcCIDRs()
 		default:
-			cidr = node.GetIPv4AllocRange()
+			cidrs = []*cidr.CIDR{node.GetIPv4AllocRange()}
 		}
 		fromFS = node.GetInternalIPv4Router()
 	}
 
-	restoredIP := node.RestoreHostIPs(ipv6, fromK8s, fromFS, cidr)
-	if err := removeOldRouterState(restoredIP); err != nil {
+	restoredIP := node.RestoreHostIPs(ipv6, fromK8s, fromFS, cidrs)
+	if err := removeOldRouterState(ipv6, restoredIP); err != nil {
 		log.WithError(err).Warnf(
 			"Failed to remove old router IPs (restored IP: %s) from cilium_host. Manual intervention is required to remove all other old IPs.",
 			restoredIP,
@@ -301,27 +306,33 @@ func restoreCiliumHostIPs(ipv6 bool, fromK8s net.IP) {
 // removeOldRouterState will try to ensure that the only IP assigned to the
 // `cilium_host` interface is the given restored IP. If the given IP is nil,
 // then it attempts to clear all IPs from the interface.
-func removeOldRouterState(restoredIP net.IP) error {
+func removeOldRouterState(ipv6 bool, restoredIP net.IP) error {
 	l, err := netlink.LinkByName(defaults.HostDevice)
 	if err != nil {
 		return err
 	}
 
-	family := netlink.FAMILY_V6
-	if restoredIP.To4() != nil {
-		family = netlink.FAMILY_V4
+	family := netlink.FAMILY_V4
+	if ipv6 {
+		family = netlink.FAMILY_V6
 	}
 	addrs, err := netlink.AddrList(l, family)
 	if err != nil {
 		return err
 	}
-	if len(addrs) > 1 {
-		log.Info("More than one router IP was found on the cilium_host device after restoration, cleaning up old router IPs.")
+
+	isRestoredIP := func(a netlink.Addr) bool {
+		return restoredIP != nil && restoredIP.Equal(a.IP)
 	}
+	if len(addrs) == 0 || (len(addrs) == 1 && isRestoredIP(addrs[0])) {
+		return nil // nothing to clean up
+	}
+
+	log.Info("More than one stale router IP was found on the cilium_host device after restoration, cleaning up old router IPs.")
 
 	var errs []error
 	for _, a := range addrs {
-		if restoredIP != nil && restoredIP.Equal(a.IP) {
+		if isRestoredIP(a) {
 			continue
 		}
 		if err := netlink.AddrDel(l, &a); err != nil {
@@ -857,17 +868,16 @@ func NewDaemon(ctx context.Context, cancel context.CancelFunc, epMgr *endpointma
 
 	// Start IPAM
 	d.startIPAM()
-
 	// After the IPAM is started, in particular IPAM modes (CRD, ENI, Alibaba)
 	// which use the VPC CIDR as the pod CIDR, we must attempt restoring the
 	// router IPs from the K8s resources if we weren't able to restore them
 	// from the fs. We must do this after IPAM because we must wait until the
 	// K8s resources have been synced. Part 2/2 of restoration.
 	if option.Config.EnableIPv4 {
-		restoreCiliumHostIPs(false, router4FromK8s)
+		d.restoreCiliumHostIPs(false, router4FromK8s)
 	}
 	if option.Config.EnableIPv6 {
-		restoreCiliumHostIPs(true, router6FromK8s)
+		d.restoreCiliumHostIPs(true, router6FromK8s)
 	}
 
 	// restore endpoints before any IPs are allocated to avoid eventual IP
@@ -884,7 +894,7 @@ func NewDaemon(ctx context.Context, cancel context.CancelFunc, epMgr *endpointma
 	}
 
 	// Must occur after d.allocateIPs(), see GH-14245 and its fix.
-	d.nodeDiscovery.StartDiscovery(nodeTypes.GetName())
+	d.nodeDiscovery.StartDiscovery()
 
 	// Annotation of the k8s node must happen after discovery of the
 	// PodCIDR range and allocation of the health IPs.
@@ -893,8 +903,8 @@ func NewDaemon(ctx context.Context, cancel context.CancelFunc, epMgr *endpointma
 		log.WithFields(logrus.Fields{
 			logfields.V4Prefix:       node.GetIPv4AllocRange(),
 			logfields.V6Prefix:       node.GetIPv6AllocRange(),
-			logfields.V4HealthIP:     d.nodeDiscovery.LocalNode.IPv4HealthIP,
-			logfields.V6HealthIP:     d.nodeDiscovery.LocalNode.IPv6HealthIP,
+			logfields.V4HealthIP:     node.GetEndpointHealthIPv4(),
+			logfields.V6HealthIP:     node.GetEndpointHealthIPv6(),
 			logfields.V4CiliumHostIP: node.GetInternalIPv4Router(),
 			logfields.V6CiliumHostIP: node.GetIPv6Router(),
 		}).Info("Annotating k8s node")
@@ -902,7 +912,7 @@ func NewDaemon(ctx context.Context, cancel context.CancelFunc, epMgr *endpointma
 		err := k8s.Client().AnnotateNode(nodeTypes.GetName(),
 			encryptKeyID,
 			node.GetIPv4AllocRange(), node.GetIPv6AllocRange(),
-			d.nodeDiscovery.LocalNode.IPv4HealthIP, d.nodeDiscovery.LocalNode.IPv6HealthIP,
+			node.GetEndpointHealthIPv4(), node.GetEndpointHealthIPv6(),
 			node.GetInternalIPv4Router(), node.GetIPv6Router())
 		if err != nil {
 			log.WithError(err).Warning("Cannot annotate k8s node with CIDR range")
@@ -947,7 +957,7 @@ func NewDaemon(ctx context.Context, cancel context.CancelFunc, epMgr *endpointma
 	}
 
 	// iptables rules can be updated only after d.init() intializes the iptables above.
-	err = d.updateDNSDatapathRules()
+	err = d.updateDNSDatapathRules(d.ctx)
 	if err != nil {
 		return nil, restoredEndpoints, err
 	}
@@ -992,6 +1002,14 @@ func NewDaemon(ctx context.Context, cancel context.CancelFunc, epMgr *endpointma
 	// we populate the IPCache with the host's IP(s).
 	ipcache.InitIPIdentityWatcher()
 	identitymanager.Subscribe(d.policy)
+
+	if option.Config.EnableIPSec {
+		if err := ipsec.StartKeyfileWatcher(ctx, option.Config.IPSecKeyFile, nd, d.Datapath().Node()); err != nil {
+			log.WithError(err).Error("Unable to start IPSec keyfile watcher")
+		}
+
+		ipsec.StartStaleKeysReclaimer(ctx)
+	}
 
 	return &d, restoredEndpoints, nil
 }

@@ -27,6 +27,7 @@ require (
 	github.com/cncf/udpa/go v0.0.0-20201211205326-cc1b757b3edd // indirect
 	github.com/containernetworking/cni v0.8.1
 	github.com/containernetworking/plugins v0.9.0
+	github.com/coreos/go-systemd/v22 v22.3.2
 	github.com/davecgh/go-spew v1.1.1
 	github.com/docker/distribution v2.7.1+incompatible // indirect
 	github.com/docker/docker v0.7.3-0.20190327010347-be7ac8be2ae0
@@ -85,7 +86,7 @@ require (
 	go.mongodb.org/mongo-driver v1.5.1 // indirect
 	go.uber.org/goleak v1.1.10
 	go.universe.tf/metallb v0.9.6
-	golang.org/x/crypto v0.0.0-20210503195802-e9a32991a82e
+	golang.org/x/crypto v0.0.0-20211202192323-5770296d904e
 	golang.org/x/net v0.0.0-20211209124913-491a49abca63
 	golang.org/x/sync v0.0.0-20201207232520-09787c993a3a
 	golang.org/x/sys v0.0.0-20220114195835-da31bd327af9
@@ -99,11 +100,11 @@ require (
 	gopkg.in/ini.v1 v1.62.0
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gopkg.in/yaml.v2 v2.4.0
-	k8s.io/api v0.21.11
-	k8s.io/apiextensions-apiserver v0.21.11
-	k8s.io/apimachinery v0.21.11
-	k8s.io/client-go v0.21.11
-	k8s.io/code-generator v0.21.11
+	k8s.io/api v0.21.14
+	k8s.io/apiextensions-apiserver v0.21.14
+	k8s.io/apimachinery v0.21.14
+	k8s.io/client-go v0.21.14
+	k8s.io/code-generator v0.21.14
 	k8s.io/klog/v2 v2.9.0
 	k8s.io/kube-openapi v0.0.0-20211110012726-3cc51fd1e909
 	// We specify the controller-tools version here to be the version of the

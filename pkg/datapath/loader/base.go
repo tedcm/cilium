@@ -457,13 +457,15 @@ func (l *Loader) Reinitialize(ctx context.Context, o datapath.BaseProgramOwner, 
 		return err
 	}
 
-	if err := iptMgr.InstallRules(option.Config.HostDevice, firstInitialization, option.Config.InstallIptRules); err != nil {
+	if err := iptMgr.InstallRules(ctx, option.Config.HostDevice, firstInitialization, option.Config.InstallIptRules); err != nil {
 		return err
 	}
 
 	// Reinstall proxy rules for any running proxies if needed
 	if p != nil {
-		p.ReinstallRules()
+		if err := p.ReinstallRules(ctx); err != nil {
+			return err
+		}
 	}
 
 	return nil

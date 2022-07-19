@@ -517,6 +517,11 @@ DNS responses seen by Cilium on the node. Multiple selectors may be included in
 a single egress rule. See :ref:`DNS Obtaining Data` for information on
 collecting this IP data.
 
+.. note:: The DNS Proxy is provided in each Cilium agent.
+   As a result, DNS requests targeted by policies depend on the availability
+   of the Cilium agent pod.
+   This includes DNS policies as well as :ref:`proxy_visibility` annotations.
+
 ``toFQDNs`` egress rules cannot contain any other L3 rules, such as
 ``toEndpoints`` (under `Labels Based`_) and ``toCIDRs`` (under `CIDR Based`_).
 They may contain L4/L7 rules, such as ``toPorts`` (see `Layer 4 Examples`_)
@@ -785,6 +790,12 @@ latter rule will have no effect.
 
 .. note:: Layer 7 rules are not currently supported in `HostPolicies`, i.e.,
           policies that use :ref:`NodeSelector`.
+
+.. note:: Layer 7 policies --and pod annotations-- result in traffic being
+   proxied through an Envoy instance provided in each Cilium agent pod.
+   As a result, L7 traffic targeted by policies depend on the availability
+   of the Cilium agent pod.
+   This includes L7 policies as well as :ref:`proxy_visibility` annotations.
 
 HTTP
 ----
