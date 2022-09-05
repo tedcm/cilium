@@ -1732,12 +1732,21 @@ int handle_to_container(struct __ctx_buff *ctx)
 	__u32 identity = 0;
 	__u16 proto;
 
+	send_trace_notify(ctx, trace, ctx->mark, 0, 0,
+			  ctx->ingress_ifindex, 0, TRACE_PAYLOAD_LEN);
+
 	if (!validate_ethertype(ctx, &proto)) {
 		ret = DROP_UNSUPPORTED_L2;
 		goto out;
 	}
 
+	send_trace_notify(ctx, trace, ctx->mark, 0, 0,
+			  ctx->ingress_ifindex, 0, TRACE_PAYLOAD_LEN);
+
 	bpf_clear_meta(ctx);
+
+	send_trace_notify(ctx, trace, ctx->mark, 0, 0,
+			  ctx->ingress_ifindex, 0, TRACE_PAYLOAD_LEN);
 
 	if (inherit_identity_from_host(ctx, &identity))
 		trace = TRACE_FROM_PROXY;
