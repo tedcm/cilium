@@ -913,6 +913,8 @@ encrypt_to_stack:
 #endif
 	send_trace_notify(ctx, TRACE_TO_STACK, SECLABEL, *dstID, 0, 0,
 			  ct_ret, monitor);
+	send_trace_notify(ctx, TRACE_TO_STACK, ctx->mark, *dstID, 0, 0,
+			  ct_ret, monitor);
 	cilium_dbg_capture(ctx, DBG_CAPTURE_DELIVERY, 0);
 	return CTX_ACT_OK;
 }
