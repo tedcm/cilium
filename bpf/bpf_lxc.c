@@ -938,7 +938,8 @@ int tail_handle_ipv4(struct __ctx_buff *ctx)
 			       REASON_MISSED_CUSTOM_CALL);
 	}
 #endif
-
+	send_trace_notify(ctx, TRACE_TO_STACK, ctx->mark, dstID, 0, 0,
+			  ret, 0);
 	return ret;
 }
 
