@@ -1028,6 +1028,9 @@ int handle_xgress(struct __ctx_buff *ctx)
 		ret = DROP_UNKNOWN_L3;
 	}
 
+	send_trace_notify(ctx, TRACE_FROM_STACK, ctx->mark, 0, 0,
+			  ctx->ingress_ifindex, 0, TRACE_PAYLOAD_LEN);
+
 out:
 	if (IS_ERR(ret))
 		return send_drop_notify(ctx, SECLABEL, 0, 0, ret, CTX_ACT_DROP,
