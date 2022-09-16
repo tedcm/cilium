@@ -327,6 +327,10 @@ func (l *Loader) reloadDatapath(ctx context.Context, ep datapath.Endpoint, dirs 
 				// loading the program.
 				if ctx.Err() == nil {
 					scopedLog.WithError(err).Warn("JoinEP: Failed to load program")
+				} else {
+					// Adding more logging to understand early termination
+					scopedLog.WithError(err).Warn("JoinEP: ctx cancelled before replaceDatapath could complete")
+					scopedLog.WithError(ctx.Err()).Warn("ctx cancelled early")
 				}
 				return err
 			}
