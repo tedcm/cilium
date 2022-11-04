@@ -108,6 +108,23 @@ func (in *ENI) DeepEqual(other *ENI) bool {
 		}
 	}
 
+	if ((in.Prefixes != nil) && (other.Prefixes != nil)) || ((in.Prefixes == nil) != (other.Prefixes == nil)) {
+		in, other := &in.Prefixes, &other.Prefixes
+		if other == nil {
+			return false
+		}
+
+		if len(*in) != len(*other) {
+			return false
+		} else {
+			for i, inElement := range *in {
+				if inElement != (*other)[i] {
+					return false
+				}
+			}
+		}
+	}
+
 	if ((in.SecurityGroups != nil) && (other.SecurityGroups != nil)) || ((in.SecurityGroups == nil) != (other.SecurityGroups == nil)) {
 		in, other := &in.SecurityGroups, &other.SecurityGroups
 		if other == nil {
@@ -244,6 +261,22 @@ func (in *ENISpec) DeepEqual(other *ENISpec) bool {
 		return false
 	} else if in.DeleteOnTermination != nil {
 		if *in.DeleteOnTermination != *other.DeleteOnTermination {
+			return false
+		}
+	}
+
+	if (in.UsePrimaryAddress == nil) != (other.UsePrimaryAddress == nil) {
+		return false
+	} else if in.UsePrimaryAddress != nil {
+		if *in.UsePrimaryAddress != *other.UsePrimaryAddress {
+			return false
+		}
+	}
+
+	if (in.DisablePrefixDelegation == nil) != (other.DisablePrefixDelegation == nil) {
+		return false
+	} else if in.DisablePrefixDelegation != nil {
+		if *in.DisablePrefixDelegation != *other.DisablePrefixDelegation {
 			return false
 		}
 	}

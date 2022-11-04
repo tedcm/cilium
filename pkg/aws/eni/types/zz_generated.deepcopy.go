@@ -55,6 +55,11 @@ func (in *ENI) DeepCopyInto(out *ENI) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.Prefixes != nil {
+		in, out := &in.Prefixes, &out.Prefixes
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	if in.SecurityGroups != nil {
 		in, out := &in.SecurityGroups, &out.SecurityGroups
 		*out = make([]string, len(*in))
@@ -107,6 +112,16 @@ func (in *ENISpec) DeepCopyInto(out *ENISpec) {
 	}
 	if in.DeleteOnTermination != nil {
 		in, out := &in.DeleteOnTermination, &out.DeleteOnTermination
+		*out = new(bool)
+		**out = **in
+	}
+	if in.UsePrimaryAddress != nil {
+		in, out := &in.UsePrimaryAddress, &out.UsePrimaryAddress
+		*out = new(bool)
+		**out = **in
+	}
+	if in.DisablePrefixDelegation != nil {
+		in, out := &in.DisablePrefixDelegation, &out.DisablePrefixDelegation
 		*out = new(bool)
 		**out = **in
 	}

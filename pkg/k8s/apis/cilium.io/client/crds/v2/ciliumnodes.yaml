@@ -126,6 +126,10 @@ spec:
                       is not set the default behavior is to delete the ENI on instance
                       termination.
                     type: boolean
+                  disable-prefix-delegation:
+                    description: DisablePrefixDelegation determines whether ENI prefix
+                      delegation should be disabled on this node.
+                    type: boolean
                   first-interface-index:
                     description: FirstInterfaceIndex is the index of the first ENI
                       to use for IP allocation, e.g. if the node has eth0, eth1, eth2
@@ -193,6 +197,10 @@ spec:
                     description: SubnetTags is the list of tags to use when evaluating
                       what AWS subnets to use for ENI and IP allocation.
                     type: object
+                  use-primary-address:
+                    description: UsePrimaryAddress determines whether an ENI's primary
+                      address should be available for allocations on the node
+                    type: boolean
                   vpc-id:
                     description: VpcID is the VPC ID to use when allocating ENIs.
                     type: string
@@ -469,6 +477,12 @@ spec:
                           description: Number is the interface index, it used in combination
                             with FirstInterfaceIndex
                           type: integer
+                        prefixes:
+                          description: Prefixes is the list of all /28 prefixes associated
+                            with the ENI
+                          items:
+                            type: string
+                          type: array
                         security-groups:
                           description: SecurityGroups are the security groups associated
                             with the ENI

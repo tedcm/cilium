@@ -44,7 +44,10 @@ func (a *AllocatorAWS) Init(ctx context.Context) error {
 	} else {
 		aMetrics = &apiMetrics.NoOpMetrics{}
 	}
-	a.client = ec2shim.NewClient(ec2.NewFromConfig(cfg), aMetrics, operatorOption.Config.IPAMAPIQPSLimit, operatorOption.Config.IPAMAPIBurst, subnetsFilters, operatorOption.Config.ENITags)
+
+	a.client = ec2shim.NewClient(ec2.NewFromConfig(cfg), aMetrics, operatorOption.Config.IPAMAPIQPSLimit,
+		operatorOption.Config.IPAMAPIBurst, subnetsFilters, operatorOption.Config.ENITags,
+		operatorOption.Config.AWSUsePrimaryAddress)
 
 	if err := limits.UpdateFromUserDefinedMappings(operatorOption.Config.AWSInstanceLimitMapping); err != nil {
 		return fmt.Errorf("failed to parse aws-instance-limit-mapping: %w", err)
@@ -72,7 +75,8 @@ func (a *AllocatorAWS) Start(ctx context.Context, getterUpdater ipam.CiliumNodeG
 	}
 	instances := eni.NewInstancesManager(a.client)
 	nodeManager, err := ipam.NewNodeManager(instances, getterUpdater, iMetrics,
-		operatorOption.Config.ParallelAllocWorkers, operatorOption.Config.AWSReleaseExcessIPs)
+		operatorOption.Config.ParallelAllocWorkers, operatorOption.Config.AWSReleaseExcessIPs,
+		operatorOption.Config.AWSEnablePrefixDelegation)
 	if err != nil {
 		return nil, fmt.Errorf("unable to initialize ENI node manager: %w", err)
 	}
