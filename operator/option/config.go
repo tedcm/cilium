@@ -29,6 +29,12 @@ const (
 
 	// CESSlicingModeDefault is default method for grouping CEP in a CES.
 	CESSlicingModeDefault = "cesSliceModeIdentity"
+
+	// CNPStatusCleanupQPSDefault is the default rate for the CNP NodeStatus updates GC.
+	CNPStatusCleanupQPSDefault = 10
+
+	// CNPStatusCleanupBurstDefault is the default maximum burst for the CNP NodeStatus updates GC.
+	CNPStatusCleanupBurstDefault = 20
 )
 
 const (
@@ -51,6 +57,19 @@ const (
 	// CNPStatusUpdateInterval is the interval between status updates
 	// being sent to the K8s apiserver for a given CNP.
 	CNPStatusUpdateInterval = "cnp-status-update-interval"
+
+	// SkipCNPStatusStartupClean specifies if the cleanup of all the CNP
+	// NodeStatus updates at startup must be skipped.
+	SkipCNPStatusStartupClean = "skip-cnp-status-startup-clean"
+
+	// CNPStatusCleanupQPS is the rate at which the cleanup operation of the status
+	// nodes updates in CNPs is carried out. It is expressed as queries per second,
+	// and for each query a single CNP status update will be deleted.
+	CNPStatusCleanupQPS = "cnp-status-cleanup-qps"
+
+	// CNPStatusCleanupBurst is the maximum burst of queries allowed for the cleanup
+	// operation of the status nodes updates in CNPs.
+	CNPStatusCleanupBurst = "cnp-status-cleanup-burst"
 
 	// EnableMetrics enables prometheus metrics.
 	EnableMetrics = "enable-metrics"
@@ -248,6 +267,19 @@ type OperatorConfig struct {
 	// NodeGCInterval is the GC interval for CiliumNodes
 	NodeGCInterval time.Duration
 
+	// SkipCNPStatusStartupClean disables the cleanup of all the CNP
+	// NodeStatus updates at startup.
+	SkipCNPStatusStartupClean bool
+
+	// CNPStatusCleanupQPS is the rate at which the cleanup operation of the status
+	// nodes updates in CNPs is carried out. It is expressed as queries per second,
+	// and for each query a single CNP status update will be deleted.
+	CNPStatusCleanupQPS float64
+
+	// CNPStatusCleanupBurst is the maximum burst of queries allowed for the cleanup
+	// operation of the status nodes updates in CNPs.
+	CNPStatusCleanupBurst int
+
 	// EnableMetrics enables prometheus metrics.
 	EnableMetrics bool
 
@@ -440,6 +472,9 @@ func (c *OperatorConfig) Populate() {
 	c.CNPNodeStatusGCInterval = viper.GetDuration(CNPNodeStatusGCInterval)
 	c.CNPStatusUpdateInterval = viper.GetDuration(CNPStatusUpdateInterval)
 	c.NodeGCInterval = viper.GetDuration(NodesGCInterval)
+	c.SkipCNPStatusStartupClean = viper.GetBool(SkipCNPStatusStartupClean)
+	c.CNPStatusCleanupQPS = viper.GetFloat64(CNPStatusCleanupQPS)
+	c.CNPStatusCleanupBurst = viper.GetInt(CNPStatusCleanupBurst)
 	c.EnableMetrics = viper.GetBool(EnableMetrics)
 	c.EndpointGCInterval = viper.GetDuration(EndpointGCInterval)
 	c.IdentityGCInterval = viper.GetDuration(IdentityGCInterval)

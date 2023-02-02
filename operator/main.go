@@ -40,6 +40,7 @@ import (
 	"github.com/cilium/cilium/pkg/rand"
 	"github.com/cilium/cilium/pkg/rate"
 	"github.com/cilium/cilium/pkg/version"
+	xrate "golang.org/x/time/rate"
 
 	gops "github.com/google/gops/agent"
 	"github.com/sirupsen/logrus"
@@ -508,6 +509,22 @@ func onOperatorStartLeading(ctx context.Context) {
 		log.WithError(err).Fatal("Unable to setup node watcher")
 	}
 
+	if operatorOption.Config.SkipCNPStatusStartupClean {
+		log.Info("Skipping clean up of CNP and CCNP node status updates")
+	} else {
+		// If CNP status updates are disabled, we clean up all the
+		// possible updates written when the option was enabled.
+		// This is done to avoid accumulating stale updates and thus
+		// hindering scalability for large clusters.
+		RunCNPStatusNodesCleaner(ctx,
+			k8s.CiliumClient().CiliumV2(),
+			xrate.NewLimiter(
+				xrate.Limit(operatorOption.Config.CNPStatusCleanupQPS),
+				operatorOption.Config.CNPStatusCleanupBurst,
+			),
+		)
+	}
+
 	if operatorOption.Config.CNPNodeStatusGCInterval != 0 {
 		RunCNPNodeStatusGC(ciliumNodeStore)
 	}
@@ -521,7 +538,7 @@ func onOperatorStartLeading(ctx context.Context) {
 		// Once the CiliumNodes are synchronized with the operator we will
 		// be able to watch for K8s Node events which they will be used
 		// to create the remaining CiliumNodes.
-		<-k8sCiliumNodesCacheSynced
+		<-ciliumNodeManagerQueueSynced
 
 		// We don't want CiliumNodes that don't have podCIDRs to be
 		// allocated with a podCIDR already being used by another node.

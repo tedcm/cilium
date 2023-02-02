@@ -16,11 +16,12 @@ concurrency:
 
 env:
   cilium_cli_version: v0.12.0
-  KIND_VERSION: v0.11.1
+  KIND_VERSION: v0.17.0
   KIND_CONFIG: .github/kind-config.yaml
   CONFORMANCE_TEMPLATE: examples/kubernetes/connectivity-check/connectivity-check.yaml
   TIMEOUT: 2m
   LOG_TIME: 30m
+  PROM_VERSION: 2.34.0
 
 jobs:
   check_changes:
@@ -90,9 +91,9 @@ jobs:
         id: vars
         run: |
           if [ ${{ github.event.pull_request.head.sha }} != "" ]; then
-            echo ::set-output name=tag::${{ github.event.pull_request.head.sha }}
+            echo tag=${{ github.event.pull_request.head.sha }} >> $GITHUB_OUTPUT
           else
-            echo ::set-output name=tag::${{ github.sha }}
+            echo tag=${{ github.sha }} >> $GITHUB_OUTPUT
           fi
 
       - name: Precheck generated connectivity manifest files
@@ -102,7 +103,7 @@ jobs:
           test -z "$(git status --porcelain)" || (echo "please run 'make -C examples/kubernetes/connectivity-check fmt all' and submit your changes"; exit 1)
 
       - name: Create kind cluster
-        uses: helm/kind-action@9e8295d178de23cbfbd8fa16cf844eec1d773a07
+        uses: helm/kind-action@d8ccf8fb623ce1bb360ae2f45f323d9d5c5e9f00
         with:
           version: ${{ env.KIND_VERSION }}
           config: ${{ env.KIND_CONFIG }}
@@ -166,8 +167,14 @@ jobs:
           cilium_pod=$(kubectl -n kube-system get po -o name --field-selector=status.phase==Running -l 'k8s-app=cilium' -o jsonpath='{.items[0].metadata.name}' )
           kubectl -n kube-system exec $cilium_pod -- sh -c "apt update && apt install curl -y"
           kubectl -n kube-system exec $cilium_pod -- curl http://localhost:9090/metrics > metrics.prom
-          GO111MODULE=on go get github.com/prometheus/prometheus/cmd/promtool@e4487274853c587717006eeda8804e597d120340 # This is commit hash for v2.24.1
-          cat metrics.prom | $HOME/go/bin/promtool check metrics
+          # Install promtool binary release. `go install` doesn't work due to
+          # https://github.com/prometheus/prometheus/issues/8852 and related issues.
+          curl -sSL --remote-name-all https://github.com/prometheus/prometheus/releases/download/v${PROM_VERSION}/{prometheus-${PROM_VERSION}.linux-amd64.tar.gz,sha256sums.txt}
+          sha256sum --check --ignore-missing sha256sums.txt
+          tar xzvf prometheus-${PROM_VERSION}.linux-amd64.tar.gz prometheus-${PROM_VERSION}.linux-amd64/promtool
+          rm -f prometheus-${PROM_VERSION}.linux-amd64.tar.gz
+          sudo mv prometheus-${PROM_VERSION}.linux-amd64/promtool /usr/bin
+          cat metrics.prom | promtool check metrics
 
       - name: Capture cilium-sysdump
         if: ${{ failure() }}
@@ -188,7 +195,7 @@ jobs:
           cilium sysdump --output-filename cilium-sysdump-out
 
       - name: Upload cilium-sysdump
-        uses: actions/upload-artifact@83fd05a356d7e2593de66fc9913b3002723633cb
+        uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce
         if: ${{ failure() }}
         with:
           name: cilium-sysdump-out.zip

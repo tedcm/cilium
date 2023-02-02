@@ -1,5 +1,143 @@
 # Changelog
 
+## v1.11.13
+
+Summary of Changes
+------------------
+
+**Minor Changes:**
+* Bugtool: add flag to exclude object for endpoints (Backport PR #23313, Upstream PR #22370, @tbalthazar)
+* Fix crash of CES queue delay metric when CESTracker is nil (Backport PR #23313, Upstream PR #22884, @dlapcevic)
+
+**Bugfixes:**
+* Added Agent init check that removes all CiliumEndpoints referencing local Node that are not managed. This fixes issues where sometimes CiliumEndpoints referencing still running Pods can become unmanaged during Cilium restart. (Backport PR #22563, Upstream PR #20350, @tommyp1ckles)
+* Clear stale CNP status nodes if updates have been disabled (Backport PR #22563, Upstream PR #20366, @pippolo84)
+* clustermesh: Add missing brackets of IPv6 address for etcd option (Backport PR #23313, Upstream PR #22962, @YutaroHayakawa)
+* docs: Update Cilium Sphinx RTD Theme reference (Backport PR #22563, Upstream PR #22321, @kimstacy)
+* envoy: Fix regression on passing TLS SNI option to upstream TLS connections (#23031, @jrajahalme)
+* Fail validate-cnp preflight check if a CiliumClusterwideNetworkPolicy is using an empty toEndpoints/fromEndpoints selector (Backport PR #22563, Upstream PR #21990, @thorn3r)
+* Fix a data race in dnsproxy which could lead to DNS requests drops. (Backport PR #23313, Upstream PR #22619, @aspsk)
+
+**CI Changes:**
+* .github: Pin docker buildx version to v0.9.1 (v2) (Backport PR #23313, Upstream PR #23220, @joestringer)
+* daemon/cmd: improve stale cilium endpoint error handling. (Backport PR #23313, Upstream PR #22600, @tommyp1ckles)
+* golangci-lint-action: Remove skip-go-installation option (#23216, @michi-covalent)
+* test/helpers: Fix retry condition for CiliumExecContext (Backport PR #23313, Upstream PR #22726, @christarazi)
+* test: service: fix formatting of error msg in doFragmentedRequest() (Backport PR #23313, Upstream PR #22772, @julianwiedmann)
+
+**Misc Changes:**
+* .github/workflows: use right event type for auto labeler (Backport PR #22563, Upstream PR #22508, @aanm)
+* .github: add PR labeler for external contributions (Backport PR #22563, Upstream PR #22461, @aanm)
+* Add sphinxcontrib-googleanalytics to doc requirements (Backport PR #23313, Upstream PR #22821, @chalin)
+* backporting: leave `backport/author` PRs alone (Backport PR #23313, Upstream PR #22654, @bimmlerd)
+* build(deps): bump actions/cache from 3.0.11 to 3.2.3 (#22986, @dependabot[bot])
+* build(deps): bump actions/download-artifact from 3.0.1 to 3.0.2 (#22958, @dependabot[bot])
+* build(deps): bump actions/upload-artifact from 3.1.1 to 3.1.2 (#22987, @dependabot[bot])
+* build(deps): bump docker/build-push-action from 3.2.0 to 3.3.0 (#23114, @dependabot[bot])
+* build(deps): bump github/codeql-action from 2.1.37 to 2.1.38 (#23071, @dependabot[bot])
+* build(deps): bump github/codeql-action from 2.1.38 to 2.1.39 (#23187, @dependabot[bot])
+* build(deps): bump golangci/golangci-lint-action from 3.3.1 to 3.4.0 (#23251, @dependabot[bot])
+* build(deps): update package dependencies (Backport PR #23313, Upstream PR #23140, @fengshunli)
+* chore(deps): update docker.io/library/ubuntu:20.04 docker digest to 0e0402c (v1.11) (#22638, @renovate[bot])
+* ci, github: Fix IPv6 conformance test (Backport PR #23055, Upstream PR #22774, @borkmann)
+* contrib: Update PR template for backport (Backport PR #23313, Upstream PR #23058, @sayboras)
+* daemon/cmd: Fix error handling for getting proxy port (Backport PR #22563, Upstream PR #22296, @christarazi)
+* docs: add instructions to build the base images from external forks (Backport PR #22563, Upstream PR #22304, @aanm)
+* docs: Fix `kubectl create` output in docs after some deployments have moved from K8s "extensions" to "apps". (Backport PR #22563, Upstream PR #22002, @cleverhu)
+* docs: Improve IPsec guide (Backport PR #23313, Upstream PR #23135, @pchaigno)
+* docs: Improve wording for deny policies limitation (Backport PR #23313, Upstream PR #23095, @joestringer)
+* docs: update committer security requirements (Backport PR #23313, Upstream PR #23134, @xmulligan)
+* gha: Bump k8s version in kind conformance tests (Backport PR #23055, Upstream PR #22325, @sayboras)
+* IPsec: Refactor `ipSecReplaceState{In,Out}` functions (Backport PR #23313, Upstream PR #23158, @pchaigno)
+* k8s: don't consider 4xx a successful interaction (Backport PR #22563, Upstream PR #22393, @bimmlerd)
+* Update CNI to 1.2.0 (Backport PR #23313, Upstream PR #23267, @michi-covalent)
+* Update Layer 7 Protocol Visibility Document. (Backport PR #23313, Upstream PR #22807, @obaranov1)
+* vendor: Pick up security fixes (#23215, @michi-covalent)
+
+**Other Changes:**
+* [v1.11] images: Bump Hubble CLI to v0.11.1 (#23302, @gandro)
+* install: Update image digests for v1.11.12 (#22818, @joestringer)
+
+## v1.11.12
+
+Summary of Changes
+------------------
+
+**Bugfixes:**
+* Fix bug that could lead to inconsistent pod IP information between agents, sometimes leading to a failure to decrypt IPsec traffic. (Backport PR #22309, Upstream PR #22127, @aanm)
+* Fix bug where configuring the API rate limiter options could fail when providing multiple options (Backport PR #22752, Upstream PR #22299, @thorn3r)
+* Fix forwarding of the security identity by the DNS proxy which could cause random policy denials (Backport PR #22456, Upstream PR #22361, @aspsk)
+* Fix GC of CEPs that were not GCed by kube-apiserver (Backport PR #22309, Upstream PR #22213, @aanm)
+
+**CI Changes:**
+* .github: Explicitly set build-commits job runner image version and install libtinfo5 (Backport PR #22329, Upstream PR #22315, @chancez)
+* .github: fix bpf-checks on ubuntu-latest runner (Backport PR #22329, Upstream PR #22322, @julianwiedmann)
+* Fix CODEOWNERS (#22293, @michi-covalent)
+
+**Misc Changes:**
+* .github/workflows: split the image tag update in two steps (Backport PR #22261, Upstream PR #22268, @aanm)
+* Add automatic creation of Cilium base images (Backport PR #22261, Upstream PR #22179, @aanm)
+* bpf: Remove FIB lookup for IPsec (Backport PR #22309, Upstream PR #22069, @pchaigno)
+* build(deps): bump actions/setup-go from 3.3.1 to 3.4.0 (#22485, @dependabot[bot])
+* build(deps): bump actions/setup-go from 3.4.0 to 3.5.0 (#22713, @dependabot[bot])
+* build(deps): bump actions/upload-artifact from 3.1.0 to 3.1.1 (#22305, @dependabot[bot])
+* build(deps): bump github/codeql-action from 2.1.32 to 2.1.35 (#22495, @dependabot[bot])
+* build(deps): bump github/codeql-action from 2.1.35 to 2.1.36 (#22631, @dependabot[bot])
+* build(deps): bump github/codeql-action from 2.1.36 to 2.1.37 (#22760, @dependabot[bot])
+* build(deps): bump helm/kind-action from 1.4.0 to 1.5.0 (#22714, @dependabot[bot])
+* build(deps): bump KyleMayes/install-llvm-action from 1.6.0 to 1.6.1 (#22594, @dependabot[bot])
+* chore(deps): update base-images (v1.11) (#22123, @renovate[bot])
+* gha: Pin ubuntu-20.04 for conformance-test-ipv6 (Backport PR #22329, Upstream PR #22324, @sayboras)
+
+**Other Changes:**
+* .github/workflows: install promtool from binary release (#22331, @tklauser)
+* install: Update image digests for v1.11.11 (#22239, @michi-covalent)
+
+## v1.11.11
+
+Summary of Changes
+------------------
+
+**Bugfixes:**
+* Fix overlapping/duplicate PodCIDR allocation when nodes are added while operator is down (Backport PR #22073, Upstream PR #21526, @dylandreimerink)
+* Fixed CCNP garbage collection (Backport PR #21810, Upstream PR #21394, @zuzzas)
+* Fixes a deadlock that can be exposed in high-churn clusters when Pods are deleted rapidly. (Backport PR #21810, Upstream PR #21771, @squeed)
+
+**Misc Changes:**
+* Add a section with distro-specific considerations (Backport PR #22073, Upstream PR #21064, @bmcustodio)
+* build(deps): bump actions/cache from 3.0.10 to 3.0.11 (#21721, @dependabot[bot])
+* build(deps): bump actions/download-artifact from 3.0.0 to 3.0.1 (#21841, @dependabot[bot])
+* build(deps): bump actions/setup-go from 3.3.0 to 3.3.1 (#21786, @dependabot[bot])
+* build(deps): bump actions/upload-artifact from 3.1.0 to 3.1.1 (#21849, @dependabot[bot])
+* build(deps): bump docker/build-push-action from 3.1.1 to 3.2.0 (#21697, @dependabot[bot])
+* build(deps): bump docker/login-action from 2.0.0 to 2.1.0 (#21698, @dependabot[bot])
+* build(deps): bump docker/setup-buildx-action from 2.0.0 to 2.1.0 (#21700, @dependabot[bot])
+* build(deps): bump docker/setup-buildx-action from 2.1.0 to 2.2.0 (#21757, @dependabot[bot])
+* build(deps): bump docker/setup-buildx-action from 2.2.0 to 2.2.1 (#21787, @dependabot[bot])
+* build(deps): bump docker/setup-qemu-action from 2.0.0 to 2.1.0 (#21696, @dependabot[bot])
+* build(deps): bump dorny/paths-filter from 2.10.2 to 2.11.1 (#21711, @dependabot[bot])
+* build(deps): bump github/codeql-action from 2.1.27 to 2.1.28 (#21785, @dependabot[bot])
+* build(deps): bump github/codeql-action from 2.1.28 to 2.1.29 (#21892, @dependabot[bot])
+* build(deps): bump github/codeql-action from 2.1.29 to 2.1.30 (#21972, @dependabot[bot])
+* build(deps): bump github/codeql-action from 2.1.30 to 2.1.32 (#22156, @dependabot[bot])
+* build(deps): bump golangci/golangci-lint-action from 3.2.0 to 3.3.0 (#21840, @dependabot[bot])
+* build(deps): bump golangci/golangci-lint-action from 3.3.0 to 3.3.1 (#22112, @dependabot[bot])
+* build(deps): bump KyleMayes/install-llvm-action from 1.5.5 to 1.6.0 (#21867, @dependabot[bot])
+* chore(deps): update docker.io/library/alpine docker tag to v3.16.3 (v1.11) (#22145, @renovate[bot])
+* chore(deps): update docker.io/library/alpine docker tag to v3.16.3 (v1.11) (#22146, @renovate[bot])
+* chore(deps): update docker.io/library/alpine:3.12.7 docker digest to de25c7f (v1.11) (#22124, @renovate[bot])
+* chore(deps): update docker.io/library/alpine:3.16.2 docker digest to 65a2763 (v1.11) (#22125, @renovate[bot])
+* chore(deps): update docker.io/library/golang:1.17.13 docker digest to 87262e4 (v1.11) (#22126, @renovate[bot])
+* chore(deps): update docker.io/library/ubuntu:20.04 docker digest to 450e066 (v1.11) (#22143, @renovate[bot])
+* chore(deps): update module go to 1.17 (v1.11) (#22147, @renovate[bot])
+* Clarify in documentation that Azure CNI chaining is different from Azure CNI powered by Cilium. (Backport PR #22073, Upstream PR #21897, @wedaly)
+* docs: Remove `autoDirectNodeRoutes` where not needed (Backport PR #22073, Upstream PR #21831, @pchaigno)
+* docs: Update k8s NetworkPolicy descriptions (Backport PR #21810, Upstream PR #21670, @joestringer)
+
+**Other Changes:**
+* images: update cilium-{runtime,builder} (#22195, @michi-covalent)
+* install: Update image digests for v1.11.10 (#21766, @qmonnet)
+
 ## v1.11.10
 
 Summary of Changes

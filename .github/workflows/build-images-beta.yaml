@@ -50,6 +50,8 @@ jobs:
     steps:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8c0edbc76e98fa90f69d9a2c020dcb50019dc325
+        with:
+          version: v0.9.1
 
       - name: Login to quay.io
         uses: docker/login-action@f4ef78c080cd8ba55a85445d5b36e214a81df20a
@@ -61,7 +63,7 @@ jobs:
       - name: Getting image tag
         id: tag
         run: |
-          echo ::set-output name=tag::${GITHUB_REF##*/}
+          echo tag=${GITHUB_REF##*/} >> $GITHUB_OUTPUT
 
       - name: Checking if tag already exists
         id: tag-in-repositories
@@ -78,7 +80,7 @@ jobs:
           persist-credentials: false
 
       - name: Release Build ${{ matrix.name }}
-        uses: docker/build-push-action@c56af957549030174b10d6867f20e78cfd7debc5
+        uses: docker/build-push-action@37abcedcc1da61a57767b7588cb9d03eb57e28b3
         id: docker_build_release
         with:
           context: .
@@ -103,7 +105,7 @@ jobs:
 
       # Upload artifact digests
       - name: Upload artifact digests
-        uses: actions/upload-artifact@83fd05a356d7e2593de66fc9913b3002723633cb
+        uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce
         with:
           name: image-digest ${{ matrix.name }}
           path: image-digest
@@ -120,7 +122,7 @@ jobs:
           mkdir -p image-digest/
 
       - name: Download digests of all images built
-        uses: actions/download-artifact@9782bd6a9848b53b110e712e20e42d89988822b7
+        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
         with:
           path: image-digest/
 

@@ -9,11 +9,11 @@ import (
 	"fmt"
 	"math"
 	"net"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/cilium/cilium/pkg/datapath/linux/linux_defaults"
@@ -95,14 +95,6 @@ type DNSProxy struct {
 	// UDPServer, TCPServer are the miekg/dns server instances. They handle DNS
 	// parsing etc. for us.
 	UDPServer, TCPServer *dns.Server
-
-	// UDPClient, TCPClient are the miekg/dns client instances. Forwarded
-	// requests are made with these clients but are sent to the originally
-	// intended DNS server.
-	// Note: The DNS request ID is randomized but when seeing a lot of traffic we
-	// may still exhaust the 16-bit ID space for our (source IP, source Port) and
-	// this may cause DNS disruption. A client pool may be better.
-	UDPClient, TCPClient *dns.Client
 
 	// EnableDNSCompression allows the DNS proxy to compress responses to
 	// endpoints that are larger than 512 Bytes or the EDNS0 option, if present.
@@ -458,12 +450,6 @@ func StartDNSProxy(address string, port uint16, enableDNSCompression bool, maxRe
 		EnableIPv4, EnableIPv6 = option.Config.EnableIPv4, option.Config.EnableIPv6
 	)
 
-	// Bind the DNS forwarding clients on UDP and TCP
-	// Note: SingleInFlight should remain disabled. When enabled it folds DNS
-	// retries into the previous lookup, suppressing them.
-	p.UDPClient = &dns.Client{Net: "udp", Timeout: ProxyForwardTimeout, SingleInflight: false}
-	p.TCPClient = &dns.Client{Net: "tcp", Timeout: ProxyForwardTimeout, SingleInflight: false}
-
 	start := time.Now()
 	for time.Since(start) < ProxyBindTimeout {
 		UDPConn, TCPListener, err = bindToAddr(address, port, EnableIPv4, EnableIPv6)
@@ -572,27 +558,10 @@ func (p *DNSProxy) CheckAllowed(endpointID uint64, destPort uint16, destID ident
 	return false, nil
 }
 
-func configureConnection(conn *net.Conn, secId identity.NumericIdentity) error {
-	var file *os.File
-	var err error
-
-	switch l4conn := (*conn).(type) {
-	case *net.UDPConn:
-		if file, err = l4conn.File(); err != nil {
-			return fmt.Errorf("can't get file from %v: %w", l4conn, err)
-		}
-	case *net.TCPConn:
-		if file, err = l4conn.File(); err != nil {
-			return fmt.Errorf("can't get file from %v: %w", l4conn, err)
-		}
-	default:
-		return fmt.Errorf("unsupported type %T", l4conn)
-	}
-
-	defer file.Close()
-
-	mark := int(uint32(secId)<<16 | uint32(linux_defaults.MagicMarkIdentity))
-	err = unix.SetsockoptInt(int(file.Fd()), unix.SOL_SOCKET, unix.SO_MARK, mark)
+func setSoMark(fd int, secId identity.NumericIdentity) error {
+	mark := linux_defaults.MagicMarkIdentity
+	mark |= int(uint32(secId&0xFFFF)<<16 | uint32((secId&0xFF0000)>>16))
+	err := unix.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_MARK, mark)
 	if err != nil {
 		return fmt.Errorf("error setting SO_MARK: %w", err)
 	}
@@ -666,7 +635,10 @@ func (p *DNSProxy) ServeDNS(w dns.ResponseWriter, request *dns.Msg) {
 		return
 	}
 
-	scopedLog = scopedLog.WithField(logfields.EndpointID, ep.StringID())
+	scopedLog = scopedLog.WithFields(logrus.Fields{
+		logfields.EndpointID: ep.StringID(),
+		logfields.Identity:   ep.GetIdentity(),
+	})
 
 	targetServerIP, targetServerPort, targetServerAddr, err := p.lookupTargetDNSServer(w)
 	if err != nil {
@@ -719,9 +691,9 @@ func (p *DNSProxy) ServeDNS(w dns.ResponseWriter, request *dns.Msg) {
 	var client *dns.Client
 	switch protocol {
 	case "udp":
-		client = p.UDPClient
+		client = &dns.Client{Net: "udp", Timeout: ProxyForwardTimeout, SingleInflight: false}
 	case "tcp":
-		client = p.TCPClient
+		client = &dns.Client{Net: "tcp", Timeout: ProxyForwardTimeout, SingleInflight: false}
 	default:
 		scopedLog.Error("Cannot parse DNS proxy client network to select forward client")
 		stat.Err = fmt.Errorf("Cannot parse DNS proxy client network to select forward client: %w", err)
@@ -733,6 +705,19 @@ func (p *DNSProxy) ServeDNS(w dns.ResponseWriter, request *dns.Msg) {
 	stat.ProcessingTime.End(true)
 	stat.UpstreamTime.Start()
 
+	dialer := net.Dialer{
+		Timeout: 2 * time.Second,
+		Control: func(network, address string, c syscall.RawConn) error {
+			var soerr error
+			if err := c.Control(func(su uintptr) {
+				soerr = setSoMark(int(su), ep.GetIdentity())
+			}); err != nil {
+				return err
+			}
+			return soerr
+		}}
+	client.Dialer = &dialer
+
 	conn, err := client.Dial(targetServerAddr)
 	if err != nil {
 		err := fmt.Errorf("failed to dial connection to %v: %w", targetServerAddr, err)
@@ -743,15 +728,6 @@ func (p *DNSProxy) ServeDNS(w dns.ResponseWriter, request *dns.Msg) {
 		return
 	}
 	defer conn.Close()
-
-	if err = configureConnection(&conn.Conn, ep.GetIdentity()); err != nil {
-		err := fmt.Errorf("failed to set socket options: %w", err)
-		stat.Err = err
-		scopedLog.WithError(err).Error("Failed to configure connection to the upstream DNS server, cannot service DNS request")
-		p.NotifyOnDNSMsg(time.Now(), ep, epIPPort, targetServerID, targetServerAddr, request, protocol, false, &stat)
-		p.sendRefused(scopedLog, w, request)
-		return
-	}
 
 	request.Id = dns.Id() // force a random new ID for this request
 	response, _, err := client.ExchangeWithConn(request, conn)

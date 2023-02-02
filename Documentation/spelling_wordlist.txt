@@ -352,6 +352,7 @@ enableIdentityMark
 enableK
 enableXTSocketFallback
 enablement
+endPort
 endian
 endianness
 endpointGCInterval
@@ -810,6 +811,7 @@ sha
 sidecarImageRegex
 sig
 skb
+skipCNPStatusStartupClean
 skipCRDCreation
 skipteardown
 sleepAfterInit
